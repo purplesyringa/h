@@ -37,7 +37,7 @@ impl<T, H: HashFn<T>> Phf<T, H> {
             }
             if let Some(unhashed_phf) = UnhashedPhf::try_new(
                 keys.clone().map(|key| hash_fn.hash(key)).collect(),
-                hash_space as u32,
+                hash_space,
             ) {
                 return Some(Self {
                     hash_fn: HashOrFallback::Hash(hash_fn),
@@ -53,7 +53,7 @@ impl<T, H: HashFn<T>> Phf<T, H> {
         for hash_fn in H::Fallback::iter() {
             if let Some(unhashed_phf) = UnhashedPhf::try_new(
                 keys.clone().map(|key| hash_fn.hash(key)).collect(),
-                max_hash_space as u32,
+                max_hash_space,
             ) {
                 return Some(Self {
                     hash_fn: HashOrFallback::Fallback(hash_fn),
@@ -109,7 +109,7 @@ pub(crate) enum HashOrFallback<T: ?Sized, H: HashFn<T>> {
 /// hash exactly as owned objects.
 pub trait HashFn<T: ?Sized>: Clone + Debug {
     /// Hash a key.
-    fn hash(&self, key: &T) -> u32;
+    fn hash(&self, key: &T) -> u64;
 
     /// Iterate through the hash family.
     ///
@@ -133,12 +133,12 @@ pub trait HashFn<T: ?Sized>: Clone + Debug {
 
 /// Multiplication by a random factor.
 #[derive(Clone, Debug)]
-pub struct MultiplicativeU32Hash {
-    pub(crate) factor: u32,
+pub struct MultiplicativeU64Hash {
+    pub(crate) factor: u64,
 }
 
-impl HashFn<u32> for MultiplicativeU32Hash {
-    fn hash(&self, key: &u32) -> u32 {
+impl HashFn<u64> for MultiplicativeU64Hash {
+    fn hash(&self, key: &u64) -> u64 {
         key.borrow().wrapping_mul(self.factor)
     }
 

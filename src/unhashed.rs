@@ -4,12 +4,12 @@
 #[derive(Clone, Debug)]
 pub struct Phf {
     /// Size of the hash table, without taking out-of-bounds displacements into account
-    pub(crate) hash_space: u32,
+    pub(crate) hash_space: usize,
 
     /// Size of the hash table, taking out-of-bounds displacements into account
     pub(crate) hash_space_with_oob: usize,
 
-    /// `32 - ilog2(bucket_count)`
+    /// `64 - ilog2(bucket_count)`
     pub(crate) bucket_shift: u32,
 
     /// Per-bucket displacement values
@@ -21,8 +21,8 @@ pub struct Phf {
 
 /// Imperfect hashes of the keys
 struct Hashes {
-    approx: u32,
-    bucket: u32,
+    approx: u64,
+    bucket: u64,
 }
 
 impl Phf {
@@ -33,7 +33,7 @@ impl Phf {
     /// with other parameters in this case.
     ///
     /// If there are duplicates in `keys`, returns `None`.
-    pub fn try_new(keys: Vec<u32>, hash_space: u32) -> Option<Self> {
+    pub fn try_new(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         if keys.is_empty() {
             return Some(Self {
                 hash_space: 0,
@@ -57,10 +57,10 @@ impl Phf {
     /// dataset. `key` is expected to already be hashed.
     ///
     /// May return arbitrary indices for keys outside the dataset.
-    pub fn hash(&self, key: u32) -> usize {
-        let product = key as u64 * self.hash_space as u64;
-        let approx = (product >> 32) as u32;
-        let bucket = (product as u32) >> self.bucket_shift;
+    pub fn hash(&self, key: u64) -> usize {
+        let product = key as u128 * self.hash_space as u128;
+        let approx = (product >> 64) as u64;
+        let bucket = (product as u64) >> self.bucket_shift;
         let displacement = unsafe { *self.displacements.get_unchecked(bucket as usize) };
         self.mixer.mix(approx, displacement)
     }
@@ -77,13 +77,13 @@ impl Phf {
 /// Keys, split into buckets.
 struct Buckets {
     /// Approx values of keys, ordered such that all buckets are consecutive
-    approxs: Vec<u32>,
+    approxs: Vec<u64>,
 
     /// Buckets, groups by size. The tuple is `(Bucket, size)`.
-    buckets_by_size: Vec<Vec<(u32, usize)>>,
+    buckets_by_size: Vec<Vec<(u64, usize)>>,
 
     /// The hash_space parameter this object is valid under
-    hash_space: u32,
+    hash_space: usize,
 
     bucket_count: usize,
     bucket_shift: u32,
@@ -102,39 +102,45 @@ impl Buckets {
     /// # Panics
     ///
     /// Panics if `keys` is empty.
-    fn try_new(mut keys: Vec<u32>, hash_space: u32) -> Option<Self> {
+    fn try_new(mut keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         assert!(!keys.is_empty());
 
-        // At least two buckets are required so that bucket_shift < 32
+        // At least two buckets are required so that bucket_shift < 64
         let bucket_count = keys.len().div_ceil(Self::LAMBDA).next_power_of_two().max(2);
-        let bucket_shift = 32 - bucket_count.ilog2();
+        let bucket_shift = 64 - bucket_count.ilog2();
 
         // Sort keys by bucket using a cache-friendly algorithm
-        radsort::sort_by_key(&mut keys, |key| {
-            key.wrapping_mul(hash_space) >> bucket_shift
-        });
+        let key_to_bucket = |key: u64| key.wrapping_mul(hash_space as u64) >> bucket_shift;
+        // Reduce the number of iterations
+        if bucket_count <= u16::MAX as usize {
+            radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u16);
+        } else if bucket_count <= u32::MAX as usize {
+            radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u32);
+        } else {
+            radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key));
+        }
 
         // We'll store per-size bucket lists here
-        let mut buckets_by_size: Vec<Vec<(u32, usize)>> = Vec::new();
+        let mut buckets_by_size: Vec<Vec<(u64, usize)>> = Vec::new();
 
         // A manual group_by implementation, just two pointers. `product` always stores the product
         // for the currently processed element.
-        let mut product = keys[0] as u64 * hash_space as u64;
+        let mut product = keys[0] as u128 * hash_space as u128;
         let mut left = 0;
         while left < keys.len() {
-            let bucket = product as u32 >> bucket_shift;
+            let bucket = product as u64 >> bucket_shift;
 
             // Replace the key with its Approx value in-place for future use. We have already
             // computed the product, so this is cheap.
-            keys[left] = (product >> 32) as u32;
+            keys[left] = (product >> 64) as u64;
 
             // Keep going while the key has the same bucket as the previous one
             let mut right = left + 1;
             while right < keys.len() && {
-                product = keys[right] as u64 * hash_space as u64;
-                bucket == product as u32 >> bucket_shift
+                product = keys[right] as u128 * hash_space as u128;
+                bucket == product as u64 >> bucket_shift
             } {
-                keys[right] = (product >> 32) as u32;
+                keys[right] = (product >> 64) as u64;
                 right += 1;
             }
 
@@ -170,7 +176,7 @@ impl Buckets {
     /// Iterate over buckets in decreasing size order.
     ///
     /// Yields `(Bucket, [Approx])`.
-    fn iter(&self) -> impl Iterator<Item = (u32, &[u32])> {
+    fn iter(&self) -> impl Iterator<Item = (u64, &[u64])> {
         self.buckets_by_size
             .iter()
             .enumerate()
@@ -187,9 +193,7 @@ impl Buckets {
     /// Hash space must be at least somewhat larger than the number of keys.
     fn try_generate_phf(&self, mixer: Mixer) -> Option<Phf> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
-        let alloc = (self.hash_space as usize)
-            .checked_add(u16::MAX as usize)
-            .unwrap();
+        let alloc = self.hash_space.checked_add(u16::MAX as usize).unwrap();
         let mut free = vec![u8::MAX; alloc.div_ceil(8)];
 
         // We'll fill this per-bucket array during the course of the algorithm
@@ -208,11 +212,10 @@ impl Buckets {
             }
         }
 
-        let hash_space_with_oob =
-            mixer.get_hash_space_with_oob(self.hash_space as usize, &displacements);
+        let hash_space_with_oob = mixer.get_hash_space_with_oob(self.hash_space, &displacements);
 
         Some(Phf {
-            hash_space: self.hash_space as u32,
+            hash_space: self.hash_space,
             hash_space_with_oob,
             bucket_shift: self.bucket_shift,
             displacements,
@@ -229,7 +232,7 @@ pub(crate) enum Mixer {
 }
 
 impl Mixer {
-    fn mix(&self, approx: u32, displacement: u16) -> usize {
+    fn mix(&self, approx: u64, displacement: u16) -> usize {
         match self {
             Self::Add => approx as usize + displacement as usize,
             Self::Xor => approx as usize ^ displacement as usize,
@@ -239,7 +242,7 @@ impl Mixer {
     // SAFETY: `free` as a bitmap must be large enough to fit `approx + 65535`.
     unsafe fn find_valid_displacement(
         &self,
-        approx_for_bucket: &[u32],
+        approx_for_bucket: &[u64],
         free: *const u8,
     ) -> Option<u16> {
         match self {
@@ -250,7 +253,7 @@ impl Mixer {
 
     // SAFETY: As for `find_valid_displacement`.
     unsafe fn find_valid_displacement_add(
-        approx_for_bucket: &[u32],
+        approx_for_bucket: &[u64],
         free: *const u8,
     ) -> Option<u16> {
         // Outer unrolled loop
@@ -282,7 +285,7 @@ impl Mixer {
 
     // SAFETY: As for `find_valid_displacement`.
     unsafe fn find_valid_displacement_xor(
-        approx_for_bucket: &[u32],
+        approx_for_bucket: &[u64],
         free: *const u8,
     ) -> Option<u16> {
         // Outer unrolled loop
