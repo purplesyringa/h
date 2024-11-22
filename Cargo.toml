@@ -5,5 +5,8 @@ edition = "2021"
 
 [dependencies]
 radsort = "0.1.1"
-rand = { version = "0.8.5", features = ["small_rng"] }
-siphasher = "1.0.1"
+rand = { version = "0.8.5", features = ["small_rng"], default-features = false }
+
+[features]
+default = ["std"]
+std = []

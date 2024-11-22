@@ -1,28 +1,32 @@
+use super::codegen::Codegen;
+use alloc::borrow::Cow;
+use alloc::{vec, vec::Vec};
+use core::fmt;
+
 /// A perfect hash function.
 ///
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
 pub struct Phf {
     /// Size of the hash table, without taking out-of-bounds displacements into account
-    pub(crate) hash_space: usize,
+    #[doc(hidden)]
+    pub hash_space: usize,
 
     /// Size of the hash table, taking out-of-bounds displacements into account
-    pub(crate) hash_space_with_oob: usize,
+    #[doc(hidden)]
+    pub hash_space_with_oob: usize,
 
     /// `64 - ilog2(bucket_count)`
-    pub(crate) bucket_shift: u32,
+    #[doc(hidden)]
+    pub bucket_shift: u32,
 
     /// Per-bucket displacement values
-    pub(crate) displacements: Vec<u16>,
+    #[doc(hidden)]
+    pub displacements: Cow<'static, [u16]>,
 
     /// How the displacement is mixed into the approximate position
-    pub(crate) mixer: Mixer,
-}
-
-/// Imperfect hashes of the keys
-struct Hashes {
-    approx: u64,
-    bucket: u64,
+    #[doc(hidden)]
+    pub mixer: Mixer,
 }
 
 impl Phf {
@@ -39,7 +43,7 @@ impl Phf {
                 hash_space: 0,
                 hash_space_with_oob: 1,
                 bucket_shift: 31,
-                displacements: vec![0, 0],
+                displacements: Cow::Borrowed(&[0, 0]),
                 mixer: Mixer::Add,
             });
         }
@@ -69,7 +73,7 @@ impl Phf {
     ///
     /// The index returned by `hash` is guaranteed to be less than `capacity()`, even for keys
     /// outside the training dataset.
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.hash_space_with_oob
     }
 }
@@ -218,7 +222,7 @@ impl Buckets {
             hash_space: self.hash_space,
             hash_space_with_oob,
             bucket_shift: self.bucket_shift,
-            displacements,
+            displacements: Cow::Owned(displacements),
             mixer,
         })
     }
@@ -226,7 +230,7 @@ impl Buckets {
 
 /// Algorithm for mixing displacement with the approximate position
 #[derive(Copy, Clone, Debug)]
-pub(crate) enum Mixer {
+pub enum Mixer {
     Add,
     Xor,
 }
@@ -344,3 +348,26 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
     }
     lut
 };
+
+impl fmt::Display for Codegen<'_, Phf> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "::h::low_level::UnhashedPhf {{ hash_space: {}, hash_space_with_oob: {}, bucket_shift: {}, displacements: {}, mixer: {} }}",
+            Codegen(&self.0.hash_space),
+            Codegen(&self.0.hash_space_with_oob),
+            Codegen(&self.0.bucket_shift),
+            Codegen(&self.0.displacements),
+            Codegen(&self.0.mixer),
+        )
+    }
+}
+
+impl fmt::Display for Codegen<'_, Mixer> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Mixer::Add => write!(f, "::h::low_level::Mixer::Add"),
+            Mixer::Xor => write!(f, "::h::low_level::Mixer::Xor"),
+        }
+    }
+}
