@@ -24,9 +24,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     ///
     /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
-    pub fn try_new<'a>(
-        keys: impl Iterator<Item = &'a T> + ExactSizeIterator + Clone,
-    ) -> Option<Self>
+    pub fn try_new<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Option<Self>
     where
         T: 'a,
     {

@@ -43,7 +43,7 @@ where
     }
 }
 
-impl<'a, 'b, T: ?Sized> fmt::Display for Codegen<'a, &'b T>
+impl<'a, T: ?Sized> fmt::Display for Codegen<'a, &T>
 where
     Codegen<'a, T>: fmt::Display,
 {

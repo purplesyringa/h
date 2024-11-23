@@ -207,7 +207,7 @@ impl Buckets {
         for (bucket, approx_for_bucket) in self.iter() {
             // Find non-colliding displacement. On failure, return None.
             let displacement =
-                unsafe { mixer.find_valid_displacement(&approx_for_bucket, free.as_ptr()) }?;
+                unsafe { mixer.find_valid_displacement(approx_for_bucket, free.as_ptr()) }?;
 
             displacements[bucket as usize] = displacement;
             for approx in approx_for_bucket {
