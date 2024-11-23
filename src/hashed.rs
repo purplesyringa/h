@@ -35,9 +35,11 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         // Don't let hash_space grow beyond this
         let max_hash_space = (keys.len() + 5 * percent).next_power_of_two();
 
+        // Start with different load factors for different sizes. This was tuned experimentally.
+        let mut hash_space = keys.len() + percent * keys.len().div_ceil(1000000).min(5);
+
         // Increase hash_space exponentially by 1.01 on each iteration until reaching a power of two
         // size. For good hashes, this loop should terminate soon.
-        let mut hash_space = keys.len() + percent;
         for hash_instance in H::iter() {
             if let Some(unhashed_phf) = UnhashedPhf::try_new(
                 keys.clone()
