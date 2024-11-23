@@ -1,4 +1,4 @@
-use super::{codegen::Codegen, GenericHasher, ImperfectHasher, Phf};
+use super::{codegen::Codegen, scatter::scatter, GenericHasher, ImperfectHasher, Phf};
 use alloc::vec::Vec;
 use core::borrow::Borrow;
 use core::fmt;
@@ -50,10 +50,7 @@ where
         let len = elements.len();
         let phf = Phf::try_new(elements.iter())?;
         let mut data: Vec<Option<T>> = (0..phf.capacity()).map(|_| None).collect();
-        for element in elements {
-            let hash = phf.hash(&element);
-            data[hash] = Some(element);
-        }
+        scatter(elements, |element| phf.hash(element), &mut data);
         Some(Self {
             phf,
             data: data.into(),

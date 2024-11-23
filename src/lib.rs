@@ -32,6 +32,7 @@ mod codegen;
 mod hashed;
 mod hashfn;
 mod map;
+mod scatter;
 mod set;
 mod unhashed;
 
