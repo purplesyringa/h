@@ -1,5 +1,7 @@
 use super::codegen::Codegen;
+use alloc::vec::Vec;
 use core::fmt;
+use core::hash::Hasher;
 use fastrand::Rng;
 
 /// An imperfect hash function, specialized for a particular type.
@@ -13,7 +15,7 @@ use fastrand::Rng;
 /// In addition, if `ImperfectHasher<T>` and `ImperfectHasher<U>` are implemented for one type and
 /// `T: Borrow<U>`, the hashes must be equal between `x` and `x.borrow()`.
 pub trait ImperfectHasher<T: ?Sized> {
-    /// Type of instance of the hash function.
+    /// Type of instance of the hash function. Usually just a seed.
     type Instance: Clone + fmt::Debug;
 
     /// Hash a key.
@@ -28,53 +30,140 @@ pub trait ImperfectHasher<T: ?Sized> {
     fn iter() -> impl Iterator<Item = Self::Instance>;
 }
 
-impl<'a, T: ?Sized, H> ImperfectHasher<&'a T> for H
-where
-    Self: ImperfectHasher<T>,
-{
-    type Instance = <Self as ImperfectHasher<T>>::Instance;
-
-    fn hash(instance: &Self::Instance, key: &&T) -> u64 {
-        <Self as ImperfectHasher<T>>::hash(instance, *key)
-    }
-
-    fn iter() -> impl Iterator<Item = Self::Instance> {
-        <Self as ImperfectHasher<T>>::iter()
-    }
-}
-
 /// Generic imperfect hasher.
 ///
-/// Can hash most scalar types. No stability guarantees are provided regarding the resulting hashes.
+/// Can hash types that implement [`PortableHash`], which is like [`core::hash::Hash`] but with
+/// a portability guarantee. No stability guarantees are provided regarding the resulting hashes.
+///
 /// Might be slower than necessary on structured data -- implement [`ImperfectHasher`] yourself if
 /// this matters.
+///
+/// Currrently uses wyhash, specialized with raw multiplication for scalar types.
 #[derive(Clone, Debug)]
 pub struct GenericHasher;
 
-macro_rules! impl_with_multiplication {
-    ($($ty:ty)*) => {
+impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
+    type Instance = u64;
+
+    fn hash(instance: &u64, key: &T) -> u64 {
+        if let Some(x) = reinterpret_scalar(key) {
+            x.wrapping_mul(*instance)
+        } else {
+            let mut state = wyhash::WyHash::with_seed(*instance);
+            key.hash(&mut state);
+            state.finish()
+        }
+    }
+
+    fn iter() -> impl Iterator<Item = u64> {
+        // Chosen by a fair dice roll
+        let mut rng = Rng::with_seed(0xe3206d294dd0c163);
+        core::iter::repeat_with(move || rng.u64(..))
+    }
+}
+
+/// Portable alternative to [`core::hash::Hash`].
+pub trait PortableHash {
+    fn hash<H: Hasher>(&self, state: &mut H);
+
+    fn hash_slice<H: Hasher>(data: &[Self], state: &mut H)
+    where
+        Self: Sized,
+    {
+        for piece in data {
+            piece.hash(state)
+        }
+    }
+}
+
+impl<T: ?Sized + PortableHash> PortableHash for &T {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+}
+
+impl<T: ?Sized + PortableHash> PortableHash for &mut T {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+}
+
+macro_rules! impl_write {
+    ($($ty:ty => $fn:ident,)*) => {
         $(
-            /// Multiplication by a random factor.
-            impl ImperfectHasher<$ty> for GenericHasher {
-                type Instance = u64;
-
-                fn hash(instance: &u64, key: &$ty) -> u64 {
-                    (*key as u64).wrapping_mul(*instance)
-                }
-
-                fn iter() -> impl Iterator<Item = u64> {
-                    let mut rng = Rng::with_seed(0x29601eb394f0d178);
-                    core::iter::repeat_with(move || rng.u64(..))
+            impl PortableHash for $ty {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    state.$fn(*self);
                 }
             }
         )*
     };
 }
+impl_write! {
+    u8 => write_u8,
+    u16 => write_u16,
+    u32 => write_u32,
+    u64 => write_u64,
+    usize => write_usize,
+    i8 => write_i8,
+    i16 => write_i16,
+    i32 => write_i32,
+    i64 => write_i64,
+    isize => write_isize,
+}
 
-impl_with_multiplication!(u8 u16 u32 u64 usize i8 i16 i32 i64 isize bool);
+macro_rules! impl_bytes {
+    ($($ty:ty),*) => {
+        $(
+            impl PortableHash for $ty {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    state.write(self.as_bytes());
+                }
+            }
+        )*
+    };
+}
+impl_bytes!(str, alloc::string::String);
+
+impl<T: PortableHash> PortableHash for Vec<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        <[T] as PortableHash>::hash(self, state);
+    }
+}
+
+impl<T: PortableHash> PortableHash for [T] {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_usize(self.len());
+        T::hash_slice(self, state);
+    }
+}
 
 impl fmt::Display for Codegen<'_, GenericHasher> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "::h::GenericHasher")
     }
+}
+
+fn reinterpret_scalar<T: ?Sized>(x: &T) -> Option<u64> {
+    let ty = typeid::of::<T>();
+
+    macro_rules! imp {
+        ($($ty:ty),*) => {
+            $(
+                if ty == typeid::of::<$ty>() {
+                    let x = unsafe { core::mem::transmute_copy::<&T, &$ty>(&x) };
+                    return Some(*x as u64);
+                }
+                // Scalars only implement Borrow for one level of references, so it's sound to just
+                // check &$ty and not &&$ty and so on.
+                if ty == typeid::of::<&$ty>() {
+                    let x = unsafe { core::mem::transmute_copy::<&T, &&$ty>(&x) };
+                    return Some(**x as u64);
+                }
+            )*
+        };
+    }
+    imp!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, bool);
+
+    None
 }

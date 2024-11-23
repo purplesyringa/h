@@ -8,18 +8,41 @@
 //! [phf]: https://en.wikipedia.org/wiki/Perfect_hash_function
 //!
 //!
+//! # Usage
+//!
+//! Add a dependency to `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! h = "0.1"
+//! ```
+//!
+//! Create and use a hashmap:
+//!
+//! ```rust
+//! const TABLE: h::StaticMap<u32, usize> = h::static_map! {
+//!     2648081974 => 123,
+//!     127361636 => 456,
+//!     3593220713 => 789,
+//! };
+//!
+//! assert_eq!(TABLE.get(&127361636), Some(&456));
+//! assert_eq!(TABLE.get(&123), None);
+//! ```
+//!
+//!
 //! # Imperfect hashes
 //!
 //! PHFs with a small output range, i.e. suitable for use as indices in hash tables, are built by
 //! refining imperfect hash functions -- still collision-free, but only with a full 64-bit output.
 //!
-//! This crate provides [`GenericHasher`], which implements such a family of hash functions for
-//! common types. If you need to hash a type that [`GenericHasher`] does not understand, you'll have
-//! to provide your own implementation of [`ImperfectHasher`].
-//!
 //! Note that using [`core::hash::Hash`] for this is incorrect, as it's not portable between
-//! platforms. If this hash is used, generating a hash map with a macro and then using it in runtime
+//! platforms. If that hash is used, generating a hash map with a macro and then using it in runtime
 //! may fail.
+//!
+//! Instead, this cache provides [`PortableHash`], which requires portability. You can implement
+//! this trait for your types and then use the default [`GenericHasher`] for hash tables.
+//! Alternatively, you can provide your own [`ImperfectHasher`] tuned to your data.
 
 #![no_std]
 
@@ -37,7 +60,7 @@ mod set;
 mod unhashed;
 
 pub use hashed::Phf;
-pub use hashfn::{GenericHasher, ImperfectHasher};
+pub use hashfn::{GenericHasher, ImperfectHasher, PortableHash};
 pub use map::{Map, StaticMap};
 pub use set::{Set, StaticSet};
 
@@ -48,42 +71,5 @@ pub mod low_level {
     pub use alloc::borrow::Cow;
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn test() {
-//         use codegen::Codegen;
-//         use rand::{distributions::Standard, rngs::SmallRng, Rng, SeedableRng};
-//         use std::hint::black_box;
-//         use std::time::Instant;
-
-//         let mut entries: Vec<(u64, ())> = SmallRng::seed_from_u64(0x439f26744da767e5)
-//             .sample_iter(Standard)
-//             .take(1000000)
-//             .map(|k| (k, ()))
-//             .collect();
-//         entries.sort_unstable();
-//         entries.dedup();
-
-//         let phf: Map<u64, ()> = Map::try_new(entries.clone()).unwrap();
-//         println!("{}", Codegen(&phf));
-
-//         let start = Instant::now();
-//         for _ in 0..20 {
-//             let phf: Map<u64, ()> = Map::try_new(entries.clone()).unwrap();
-//             black_box(&phf);
-//         }
-//         println!("Build time: {:?}", start.elapsed() / 20);
-
-//         let start = Instant::now();
-//         for _ in 0..1000000000 {
-//             black_box(phf.get(&black_box(0x26744da767e5439f)).copied());
-//         }
-//         println!(
-//             "Access time: {:?}ns",
-//             start.elapsed().as_nanos() as f32 / 1e9
-//         );
-//     }
-// }
+#[cfg(test)]
+mod tests;
