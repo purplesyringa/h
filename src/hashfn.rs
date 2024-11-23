@@ -1,5 +1,6 @@
 use super::codegen::Codegen;
 use core::fmt;
+use fastrand::Rng;
 
 /// An imperfect hash function, specialized for a particular type.
 ///
@@ -62,9 +63,8 @@ macro_rules! impl_with_multiplication {
                 }
 
                 fn iter() -> impl Iterator<Item = u64> {
-                    use rand::{distributions::Standard, rngs::SmallRng, Rng, SeedableRng};
-                    SmallRng::seed_from_u64(0x29601eb394f0d178)
-                        .sample_iter(Standard)
+                    let mut rng = Rng::with_seed(0x29601eb394f0d178);
+                    core::iter::repeat_with(move || rng.u64(..))
                 }
             }
         )*
