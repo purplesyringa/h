@@ -292,7 +292,8 @@ impl<T: Codegen> Codegen for Option<T> {
         match &self {
             None => gen.write_path("core::option::Option::None"),
             Some(value) => {
-                gen.write_path("core::option::Option::Some(")?;
+                gen.write_path("core::option::Option::Some")?;
+                gen.write_code("(")?;
                 gen.write(value)?;
                 gen.write_code(")")
             }
