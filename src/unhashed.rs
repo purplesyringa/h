@@ -245,7 +245,7 @@ pub enum Mixer {
 }
 
 impl Mixer {
-    fn mix(&self, approx: u64, displacement: u16) -> usize {
+    const fn mix(&self, approx: u64, displacement: u16) -> usize {
         match self {
             Self::Add => approx as usize + displacement as usize,
             Self::Xor => approx as usize ^ displacement as usize,
@@ -289,7 +289,8 @@ impl Mixer {
                 // Inner unrolled loop, aka bitmask logic
                 let start = *approx as usize + displacement_base as usize;
                 let bit_mask =
-                    unsafe { free.add(start / 8).cast::<u64>().read_unaligned() } >> (start % 8);
+                    unsafe { free.wrapping_add(start / 8).cast::<u64>().read_unaligned() }
+                        >> (start % 8);
                 global_bit_mask &= bit_mask;
             }
 
@@ -315,8 +316,10 @@ impl Mixer {
             for approx in approx_for_bucket {
                 let approx = *approx as usize;
                 // Inner unrolled loop, aka bitmask logic
-                let bit_mask =
-                    unsafe { free.add((approx ^ displacement_base as usize) / 8).read() };
+                let bit_mask = unsafe {
+                    free.wrapping_add((approx ^ displacement_base as usize) / 8)
+                        .read()
+                };
                 global_bit_mask &= BIT_INDEX_XOR_LUT[approx % 8][bit_mask as usize];
             }
 

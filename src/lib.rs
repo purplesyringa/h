@@ -76,11 +76,11 @@
     clippy::inline_asm_x86_att_syntax,
     clippy::mem_forget, // use ManuallyDrop instead
     clippy::missing_assert_message,
-    // clippy::missing_const_for_fn,
+    clippy::missing_const_for_fn,
     // clippy::missing_docs_in_private_items,
     clippy::missing_inline_in_public_items,
     clippy::mixed_read_write_in_expression,
-    // clippy::multiple_unsafe_ops_per_block,
+    clippy::multiple_unsafe_ops_per_block,
     clippy::mutex_atomic,
     clippy::needless_raw_strings,
     clippy::pub_without_shorthand,
