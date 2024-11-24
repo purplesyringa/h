@@ -62,6 +62,25 @@ where
         })
     }
 
+    /// Generate a perfect hash map.
+    ///
+    /// There must not be duplicate keys in the input.
+    ///
+    /// To instantiate [`StaticMap`], use [`static_map!`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying imperfect hash function family is finite and generation didn't
+    /// succeed.
+    #[inline]
+    #[must_use]
+    pub fn new(entries: Vec<(K, V)>) -> Self
+    where
+        Vec<Option<(K, V)>>: Into<C>,
+    {
+        Self::try_new(entries).expect("ran out of imperfect hash family instances")
+    }
+
     /// Get a key-value pair by key.
     #[inline]
     pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>

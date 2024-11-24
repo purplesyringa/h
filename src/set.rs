@@ -62,6 +62,25 @@ where
         })
     }
 
+    /// Generate a perfect hash set.
+    ///
+    /// There must not be duplicate elements in the input.
+    ///
+    /// To instantiate [`StaticSet`], use [`static_set!`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying imperfect hash function family is finite and generation didn't
+    /// succeed.
+    #[inline]
+    #[must_use]
+    pub fn new(elements: Vec<T>) -> Self
+    where
+        Vec<Option<T>>: Into<C>,
+    {
+        Self::try_new(elements).expect("ran out of imperfect hash family instances")
+    }
+
     /// Get a reference to the element if present.
     #[inline]
     pub fn get<Q>(&self, value: &Q) -> Option<&T>

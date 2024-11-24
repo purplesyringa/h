@@ -19,7 +19,7 @@
 //!
 //! Add `no-default-features = true` for `#![no_std]` support.
 //!
-//! Create and use a hashmap constructed in compile time:
+//! Create and use a static hashmap:
 //!
 //! ```rust
 //! const TABLE: h::StaticMap<u32, usize> = h::static_map! {
@@ -30,6 +30,17 @@
 //!
 //! assert_eq!(TABLE.get(&127361636), Some(&456));
 //! assert_eq!(TABLE.get(&123), None);
+//! ```
+//!
+//! ```rust
+//! let table: h::Map<u32, usize> = h::Map::new(vec![
+//!     (2648081974, 123),
+//!     (127361636, 456),
+//!     (3593220713, 789),
+//! ]);
+//!
+//! assert_eq!(table.get(&127361636), Some(&456));
+//! assert_eq!(table.get(&123), None);
 //! ```
 //!
 //!

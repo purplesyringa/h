@@ -73,6 +73,27 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         None
     }
 
+    /// Generate a perfect hash function.
+    ///
+    /// `keys` must not contain duplicates. It's an exact-size cloneable iterator rather than
+    /// a slice reference so that multiple underlying containers can be used.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `keys` contains more than `isize::MAX / 2` elements, or if the underlying
+    /// imperfect hash function family is finite and generation didn't succeed.
+    #[inline]
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
+    )]
+    pub fn new<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Self
+    where
+        T: 'a,
+    {
+        Self::try_new(keys).expect("ran out of imperfect hash family instances")
+    }
+
     /// Hash a key.
     ///
     /// The whole point. Guaranteed to return different indices for different keys from the training
