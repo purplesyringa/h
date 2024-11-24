@@ -7,6 +7,11 @@
 //!
 //! [phf]: https://en.wikipedia.org/wiki/Perfect_hash_function
 //!
+//! `h` supports hash maps, hash sets, and hash functions (whose output you can interpret yourself).
+//! Static tables can be built in compile time with ergonomic macros. Hash tables can also be
+//! generated as codegen from `build.rs`. Finally, hash tables with "simple" keys and values can be
+//! dumped to files and then loaded in runtime, including from languages other than Rust.
+//!
 //!
 //! # Usage
 //!
@@ -32,17 +37,6 @@
 //! assert_eq!(TABLE.get(&123), None);
 //! ```
 //!
-//! ```rust
-//! let table: h::Map<u32, usize> = h::Map::from_entries(vec![
-//!     (2648081974, 123),
-//!     (127361636, 456),
-//!     (3593220713, 789),
-//! ]);
-//!
-//! assert_eq!(table.get(&127361636), Some(&456));
-//! assert_eq!(table.get(&123), None);
-//! ```
-//!
 //!
 //! # Imperfect hashes
 //!
@@ -56,6 +50,20 @@
 //! Instead, this cache provides [`PortableHash`], which requires portability. You can implement
 //! this trait for your types and then use the default [`GenericHasher`] for hash tables.
 //! Alternatively, you can provide your own [`ImperfectHasher`] tuned to your data.
+//!
+//!
+//! # Advanced examples
+//!
+//! ```rust
+//! let table: h::Map<u32, usize> = h::Map::from_entries(vec![
+//!     (2648081974, 123),
+//!     (127361636, 456),
+//!     (3593220713, 789),
+//! ]);
+//!
+//! assert_eq!(table.get(&127361636), Some(&456));
+//! assert_eq!(table.get(&123), None);
+//! ```
 
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]

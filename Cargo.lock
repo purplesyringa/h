@@ -25,8 +25,8 @@ version = "0.1.0"
 dependencies = [
  "fastrand",
  "radsort",
+ "rapidhash",
  "typeid",
- "wyhash",
  "zstd",
 ]
 
@@ -58,10 +58,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "019b4b213425016d7d84a153c4c73afb0946fbb4840e4eece7ba8848b9d6da22"
 
 [[package]]
-name = "rand_core"
-version = "0.6.4"
+name = "rapidhash"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+checksum = "0c19d352e507dbbab7e95a05a98e40bcb2feb5c333c3644cd1ee65acdb819164"
 
 [[package]]
 name = "shlex"
@@ -74,15 +74,6 @@ name = "typeid"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e13db2e0ccd5e14a544e8a246ba2312cd25223f616442d7f2cb0e3db614236e"
-
-[[package]]
-name = "wyhash"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
-dependencies = [
- "rand_core",
-]
 
 [[package]]
 name = "zstd"

@@ -56,8 +56,8 @@ pub struct GenericHasher;
 /// For 128-bit integers, `key_low.wrapping_mul(seed_low) ^ key_high.wrapping_mul(seed_high)` is
 /// computed, where `low` and `high` are the low and the high 64 bits of the key/instance.
 ///
-/// For other types, wyhash is applied to the output of [`PortableHash`]. The seed is stored in the
-/// low 64 bits of the instance.
+/// For other types, rapidhash is applied to the output of [`PortableHash`]. The seed is stored in
+/// the low 64 bits of the instance.
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
     type Instance = u128;
 
@@ -77,7 +77,7 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
             (x as u64).wrapping_mul(*instance as u64)
                 ^ ((x >> 64i32) as u64).wrapping_mul((*instance >> 64i32) as u64)
         } else {
-            let mut state = wyhash::WyHash::with_seed(*instance as u64);
+            let mut state = rapidhash::RapidHasher::new(*instance as u64);
             key.hash(&mut state);
             state.finish()
         }
