@@ -25,6 +25,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     ///
     /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
+    #[inline]
     pub fn try_new<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Option<Self>
     where
         T: 'a,
@@ -65,6 +66,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     /// dataset. `key` is expected to already be hashed.
     ///
     /// May return arbitrary indices for keys outside the dataset.
+    #[inline]
     pub fn hash<U: ?Sized>(&self, key: &U) -> usize
     where
         H: ImperfectHasher<U, Instance = <H as ImperfectHasher<T>>::Instance>,
@@ -78,6 +80,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     ///
     /// The index returned by `hash` is guaranteed to *always* be less than `capacity()`, even for
     /// keys outside the training dataset.
+    #[inline]
     pub const fn capacity(&self) -> usize {
         self.unhashed_phf.capacity()
     }

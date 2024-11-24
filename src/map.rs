@@ -44,6 +44,7 @@ where
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
     ///
     /// To instantiate [`StaticMap`], use [`static_map!`].
+    #[inline] // heavy, but monomorphized anyway
     pub fn try_new(entries: Vec<(K, V)>) -> Option<Self>
     where
         Vec<Option<(K, V)>>: Into<C>,
@@ -61,6 +62,7 @@ where
     }
 
     /// Get a key-value pair by key.
+    #[inline]
     pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
     where
         K: Borrow<Q>,
@@ -74,6 +76,7 @@ where
     }
 
     /// Get a value by key.
+    #[inline]
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
@@ -84,6 +87,7 @@ where
     }
 
     /// Check if the hashmap contains a key.
+    #[inline]
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
@@ -94,11 +98,13 @@ where
     }
 
     /// Get number of entries.
+    #[inline]
     pub fn len(&self) -> usize {
         self.len
     }
 
     /// Check if the hashmap is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -106,6 +112,7 @@ where
     /// Iterate through elements.
     ///
     /// The iteration order is unspecified, but is constant for a given map.
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
         self.data
             .iter()
@@ -115,6 +122,7 @@ where
     /// Iterate through keys.
     ///
     /// The iteration order is unspecified, but is constant for a given map.
+    #[inline]
     pub fn keys(&self) -> impl Iterator<Item = &K> {
         self.iter().map(|(k, _)| k)
     }
@@ -122,6 +130,7 @@ where
     /// Iterate through values.
     ///
     /// The iteration order is unspecified, but is constant for a given map.
+    #[inline]
     pub fn values(&self) -> impl Iterator<Item = &V> {
         self.iter().map(|(_, v)| v)
     }

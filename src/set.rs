@@ -44,6 +44,7 @@ where
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
     ///
     /// To instantiate [`StaticSet`], use [`static_set!`].
+    #[inline] // heavy, but monomorphized anyway
     pub fn try_new(elements: Vec<T>) -> Option<Self>
     where
         Vec<Option<T>>: Into<C>,
@@ -61,6 +62,7 @@ where
     }
 
     /// Get a reference to the element if present.
+    #[inline]
     pub fn get<Q>(&self, value: &Q) -> Option<&T>
     where
         T: Borrow<Q>,
@@ -73,6 +75,7 @@ where
     }
 
     /// Check if the hashset contains a value.
+    #[inline]
     pub fn contains<Q>(&self, value: &Q) -> bool
     where
         T: Borrow<Q>,
@@ -83,11 +86,13 @@ where
     }
 
     /// Get number of entries.
+    #[inline]
     pub fn len(&self) -> usize {
         self.len
     }
 
     /// Check if the hashset is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -95,6 +100,7 @@ where
     /// Iterate through elements.
     ///
     /// The iteration order is unspecified, but is constant for a given set.
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.data.iter().filter_map(|opt| opt.as_ref())
     }

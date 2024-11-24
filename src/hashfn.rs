@@ -46,6 +46,7 @@ pub struct GenericHasher;
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
     type Instance = u64;
 
+    #[inline]
     fn hash(instance: &u64, key: &T) -> u64 {
         if let Some(x) = reinterpret_scalar(key) {
             x.wrapping_mul(*instance)
@@ -56,6 +57,7 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
         }
     }
 
+    #[inline]
     fn iter() -> impl Iterator<Item = u64> {
         // Hexadecimal digits of pi - 3
         let mut rng = Rng::with_seed(0x243f_6a88_85a3_08d3);
@@ -65,8 +67,15 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
 
 /// Portable alternative to [`core::hash::Hash`].
 pub trait PortableHash {
+    /// Write a value into the hasher.
     fn hash<H: Hasher>(&self, state: &mut H);
 
+    /// Write a slice values into the hasher.
+    ///
+    /// This does not write the length of the slice beforehand and is semantically equivalent to
+    /// calling [`PortableHash::hash`] for each element of the slice. When hashing a variable-length
+    /// collection, call [`Hasher::write_usize`] to emit the size before hashing the elements.
+    #[inline]
     fn hash_slice<H: Hasher>(data: &[Self], state: &mut H)
     where
         Self: Sized,
@@ -78,12 +87,14 @@ pub trait PortableHash {
 }
 
 impl<T: ?Sized + PortableHash> PortableHash for &T {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         (**self).hash(state);
     }
 }
 
 impl<T: ?Sized + PortableHash> PortableHash for &mut T {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         (**self).hash(state);
     }
@@ -93,6 +104,7 @@ macro_rules! impl_write {
     ($($ty:ty => $fn:ident,)*) => {
         $(
             impl PortableHash for $ty {
+                #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
                     state.$fn(*self);
                 }
@@ -117,6 +129,7 @@ macro_rules! impl_bytes {
     ($($ty:ty),*) => {
         $(
             impl PortableHash for $ty {
+                #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
                     state.write(self.as_bytes());
                 }
@@ -127,12 +140,14 @@ macro_rules! impl_bytes {
 impl_bytes!(str, alloc::string::String);
 
 impl<T: PortableHash> PortableHash for Vec<T> {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         <[T] as PortableHash>::hash(self, state);
     }
 }
 
 impl<T: PortableHash> PortableHash for [T] {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_usize(self.len());
         T::hash_slice(self, state);

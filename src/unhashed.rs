@@ -38,6 +38,10 @@ impl Phf {
     /// with other parameters in this case.
     ///
     /// If there are duplicates in `keys`, returns `None`.
+    #[allow(
+        clippy::missing_inline_in_public_items,
+        reason = "very heavy, we'd rather not copy it to every crate"
+    )]
     pub fn try_new(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         if keys.is_empty() {
             return Some(Self {
@@ -62,6 +66,7 @@ impl Phf {
     /// dataset. `key` is expected to already be hashed.
     ///
     /// May return arbitrary indices for keys outside the dataset.
+    #[inline]
     pub fn hash(&self, key: u64) -> usize {
         let product = key as u128 * self.hash_space as u128;
         let approx = (product >> 64i32) as u64;
@@ -74,6 +79,7 @@ impl Phf {
     ///
     /// The index returned by `hash` is guaranteed to be less than `capacity()`, even for keys
     /// outside the training dataset.
+    #[inline]
     pub const fn capacity(&self) -> usize {
         self.hash_space_with_oob
     }
@@ -232,6 +238,7 @@ impl Buckets {
 /// Algorithm for mixing displacement with the approximate position
 #[derive(Copy, Clone, Debug)]
 #[non_exhaustive]
+#[doc(hidden)]
 pub enum Mixer {
     Add,
     Xor,
