@@ -1,26 +1,6 @@
-[package]
-name = "h"
-description = "Practical, efficient perfect hash functions"
-version = "0.1.0"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/purplesyringa/h"
-readme = "README.md"
-keywords = ["perfect", "hashing", "phf"]
-categories = ["data-structures", "no-std"]
-edition = "2021"
-
-[dependencies]
-fastrand = { version = "2.2.0", default-features = false }
-radsort = "0.1.1"
-rapidhash = "1.1.0"
-typeid = "1.0.2"
-
-[features]
-default = ["std"]
-std = []
+[workspace]
+members = ["h"]
+resolver = "2"
 
 [profile.test]
 opt-level = 3
-
-[dev-dependencies]
-zstd = "0.13.2"

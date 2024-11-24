@@ -29,8 +29,9 @@ fn build_10m_integers() {
 #[cfg(feature = "std")]
 macro_rules! read_testdata {
     ($name:literal) => {{
-        let mut path = std::path::PathBuf::from(file!());
-        path.pop();
+        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("src");
+        path.push("tests");
         path.push(concat!($name, ".zst"));
         let file = std::fs::File::open(path).expect("Failed to open file");
         Cow::<'static, [u8]>::from(zstd::decode_all(file).expect("Failed to decode zstd"))
