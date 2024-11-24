@@ -1,9 +1,8 @@
 #![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
 
-use super::codegen::Codegen;
+use super::codegen::{CodeGenerator, Codegen};
 use alloc::borrow::Cow;
 use alloc::{vec, vec::Vec};
-use core::fmt;
 
 // We assume that usize is at most 64-bit in many places.
 const _: () = assert!(
@@ -446,25 +445,31 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
     lut
 };
 
-impl fmt::Display for Codegen<'_, Phf> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "::h::low_level::UnhashedPhf {{ hash_space: {}, hash_space_with_oob: {}, bucket_shift: {}, displacements: {}, mixer: {} }}",
-            Codegen(&self.0.hash_space),
-            Codegen(&self.0.hash_space_with_oob),
-            Codegen(&self.0.bucket_shift),
-            Codegen(&self.0.displacements),
-            Codegen(&self.0.mixer),
-        )
+impl Codegen for Phf {
+    #[inline]
+    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
+        gen.write_path("h::low_level::UnhashedPhf")?;
+        gen.write_code("{hash_space:")?;
+        gen.write(&self.hash_space)?;
+        gen.write_code(",hash_space_with_oob:")?;
+        gen.write(&self.hash_space_with_oob)?;
+        gen.write_code(",bucket_shift:")?;
+        gen.write(&self.bucket_shift)?;
+        gen.write_code(",displacements:")?;
+        gen.write(&self.displacements)?;
+        gen.write_code(",mixer:")?;
+        gen.write(&self.mixer)?;
+        gen.write_code("}")
     }
 }
 
-impl fmt::Display for Codegen<'_, Mixer> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            Mixer::Add => write!(f, "::h::low_level::Mixer::Add"),
-            Mixer::Xor => write!(f, "::h::low_level::Mixer::Xor"),
+impl Codegen for Mixer {
+    #[inline]
+    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
+        gen.write_path("h::low_level::Mixer")?;
+        match self {
+            Mixer::Add => gen.write_code("::Add"),
+            Mixer::Xor => gen.write_code("::Xor"),
         }
     }
 }

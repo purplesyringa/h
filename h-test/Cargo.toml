@@ -1,0 +1,14 @@
+[package]
+name = "h-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+h = { path = "../h" }
+
+[build-dependencies]
+h = { path = "../h" }
+zstd = "0.13.2"
+
+[features]
+enabled = []

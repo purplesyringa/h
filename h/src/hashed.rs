@@ -1,5 +1,8 @@
-use super::{codegen::Codegen, unhashed::Phf as UnhashedPhf, GenericHasher, ImperfectHasher};
-use core::fmt;
+use super::{
+    codegen::{CodeGenerator, Codegen},
+    unhashed::Phf as UnhashedPhf,
+    GenericHasher, ImperfectHasher,
+};
 
 /// A perfect hash function.
 ///
@@ -120,16 +123,17 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     }
 }
 
-impl<'a, T, H: ImperfectHasher<T>> fmt::Display for Codegen<'a, Phf<T, H>>
+impl<T, H: ImperfectHasher<T>> Codegen for Phf<T, H>
 where
-    Codegen<'a, H::Instance>: fmt::Display,
+    H::Instance: Codegen,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "::h::Phf {{ hash_instance: {}, unhashed_phf: {} }}",
-            Codegen(&self.0.hash_instance),
-            Codegen(&self.0.unhashed_phf),
-        )
+    #[inline]
+    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
+        gen.write_path("h::Phf")?;
+        gen.write_code("{hash_instance:")?;
+        gen.write(&self.hash_instance)?;
+        gen.write_code(",unhashed_phf:")?;
+        gen.write(&self.unhashed_phf)?;
+        gen.write_code("}")
     }
 }

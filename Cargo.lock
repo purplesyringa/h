@@ -31,6 +31,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "h-test"
+version = "0.1.0"
+dependencies = [
+ "h",
+ "zstd",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"

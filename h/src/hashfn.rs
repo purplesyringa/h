@@ -1,4 +1,4 @@
-use super::codegen::Codegen;
+use super::codegen::{CodeGenerator, Codegen};
 use alloc::vec::Vec;
 use core::fmt;
 use core::hash::Hasher;
@@ -199,9 +199,10 @@ impl<T: PortableHash> PortableHash for [T] {
     }
 }
 
-impl fmt::Display for Codegen<'_, GenericHasher> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "::h::GenericHasher")
+impl Codegen for GenericHasher {
+    #[inline]
+    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
+        gen.write_path("h::GenericHasher")
     }
 }
 

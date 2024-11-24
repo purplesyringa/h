@@ -30,7 +30,7 @@ fn build_10m_integers() {
 macro_rules! read_testdata {
     ($name:literal) => {{
         let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("src");
+        path.push("..");
         path.push("tests");
         path.push(concat!($name, ".zst"));
         let file = std::fs::File::open(path).expect("Failed to open file");

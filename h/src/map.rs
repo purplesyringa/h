@@ -1,7 +1,10 @@
-use super::{codegen::Codegen, scatter::scatter, GenericHasher, ImperfectHasher, Phf};
+use super::{
+    codegen::{CodeGenerator, Codegen},
+    scatter::scatter,
+    GenericHasher, ImperfectHasher, Phf,
+};
 use alloc::vec::Vec;
 use core::borrow::Borrow;
-use core::fmt;
 use core::marker::PhantomData;
 use core::ops::Deref;
 
@@ -156,21 +159,22 @@ where
     }
 }
 
-impl<'a, K, V, H: ImperfectHasher<K>, C: Deref<Target = [Option<(K, V)>]>> fmt::Display
-    for Codegen<'a, Map<K, V, H, C>>
+impl<K: Codegen, V: Codegen, H: ImperfectHasher<K>, C: Deref<Target = [Option<(K, V)>]>> Codegen
+    for Map<K, V, H, C>
 where
-    Codegen<'a, Phf<K, H>>: fmt::Display,
-    Codegen<'a, K>: fmt::Display,
-    Codegen<'a, V>: fmt::Display,
+    Phf<K, H>: Codegen,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "::h::StaticMap {{ phf: {}, data: &{}, len: {}, _marker: {} }}",
-            Codegen(&self.0.phf),
-            Codegen(&*self.0.data),
-            Codegen(&self.0.len),
-            Codegen(&self.0._marker),
-        )
+    #[inline]
+    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
+        gen.write_path("h::StaticMap")?;
+        gen.write_code("{phf:")?;
+        gen.write(&self.phf)?;
+        gen.write_code(",data:&")?;
+        gen.write(&*self.data)?;
+        gen.write_code(",len:")?;
+        gen.write(&self.len)?;
+        gen.write_code(",_marker:")?;
+        gen.write(&self._marker)?;
+        gen.write_code("}")
     }
 }

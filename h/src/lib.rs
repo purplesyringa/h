@@ -137,7 +137,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod codegen;
+pub mod codegen;
 mod hashed;
 mod hashfn;
 mod map;

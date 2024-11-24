@@ -1,6 +1,18 @@
 [workspace]
-members = ["h"]
+members = ["h", "h-test"]
 resolver = "2"
 
 [profile.test]
+opt-level = 3
+
+[profile.dev.build-override]
+opt-level = 3
+
+[profile.release.build-override]
+opt-level = 3
+
+[profile.test.build-override]
+opt-level = 3
+
+[profile.bench.build-override]
 opt-level = 3

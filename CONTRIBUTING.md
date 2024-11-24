@@ -13,9 +13,11 @@ There's many ways to contribute to `h`:
 
 ## Testing
 
-`cargo test` works.
+For the `h` crate, `cargo test` works.
 
 Some tests that need gigabytes of RAM are ignored by default; run them with `cargo test -- --include-ignored`. These tests are *very* slow in debug mode, so we enable `opt-level = 3` for tests. Make sure not to turn that off manually.
+
+There's also a separate `h-test` crate in the workspace, specifically for stress testing and comparison with other hash table implementations. To prevent Cargo/rust-analyzer from rerunning its slow `build.rs` script on each unrelated code change, the crate is behind the `enabled` feature. Use `cargo run --release -F enabled`.
 
 
 ## Code contributions
