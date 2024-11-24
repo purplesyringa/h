@@ -70,9 +70,14 @@ impl Phf {
     #[inline]
     #[must_use]
     pub fn hash(&self, key: u64) -> usize {
-        let product = key as u128 * self.hash_space as u128;
+        let product = multiply_scale(key, self.hash_space);
         let approx = (product >> 64i32) as u64;
+        #[allow(clippy::cast_possible_truncation, reason = "intentional")]
         let bucket = (product as u64) >> self.bucket_shift;
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "bucket < displacements.len() <= usize::MAX"
+        )]
         let displacement = unsafe { *self.displacements.get_unchecked(bucket as usize) };
         self.mixer.mix(approx, displacement)
     }
@@ -118,6 +123,10 @@ impl Buckets {
     /// Panics if `keys` is empty.
     fn try_new(mut keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         assert!(!keys.is_empty(), "Cannot create buckets from empty keys");
+        assert!(
+            hash_space.checked_add(u16::MAX as usize).is_some(),
+            "hash_space too large"
+        );
 
         // At least two buckets are required so that bucket_shift < 64
         let bucket_count = keys.len().div_ceil(Self::LAMBDA).next_power_of_two().max(2);
@@ -127,8 +136,16 @@ impl Buckets {
         let key_to_bucket = |key: u64| key.wrapping_mul(hash_space as u64) >> bucket_shift;
         // Reduce the number of iterations
         if bucket_count <= 1 << 16i32 {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "bucket < bucket_size <= 2^16"
+            )]
             radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u16);
         } else if bucket_count <= 1 << 32i32 {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "bucket < bucket_size <= 2^32"
+            )]
             radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u32);
         } else {
             radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key));
@@ -139,9 +156,10 @@ impl Buckets {
 
         // A manual group_by implementation, just two pointers. `product` always stores the product
         // for the currently processed element.
-        let mut product = keys[0] as u128 * hash_space as u128;
+        let mut product = multiply_scale(keys[0], hash_space);
         let mut left = 0;
         while left < keys.len() {
+            #[allow(clippy::cast_possible_truncation, reason = "intentional")]
             let bucket = product as u64 >> bucket_shift;
 
             // Replace the key with its Approx value in-place for future use. We have already
@@ -150,8 +168,9 @@ impl Buckets {
 
             // Keep going while the key has the same bucket as the previous one
             let mut right = left + 1;
+            #[allow(clippy::cast_possible_truncation, reason = "intentional")]
             while right < keys.len() && {
-                product = keys[right] as u128 * hash_space as u128;
+                product = multiply_scale(keys[right], hash_space);
                 bucket == product as u64 >> bucket_shift
             } {
                 keys[right] = (product >> 64i32) as u64;
@@ -219,7 +238,14 @@ impl Buckets {
             let displacement =
                 unsafe { mixer.find_valid_displacement(approx_for_bucket, free.as_ptr()) }?;
 
-            displacements[bucket as usize] = displacement;
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "bucket < displacements.len() <= usize::MAX"
+            )]
+            {
+                displacements[bucket as usize] = displacement;
+            }
+
             for approx in approx_for_bucket {
                 let index = mixer.mix(*approx, displacement);
                 *unsafe { free.get_unchecked_mut(index / 8) } &= !(1 << (index % 8));
@@ -238,6 +264,10 @@ impl Buckets {
     }
 }
 
+const fn multiply_scale(a: u64, b: usize) -> u128 {
+    a as u128 * b as u128
+}
+
 /// Algorithm for mixing displacement with the approximate position
 #[derive(Copy, Clone, Debug)]
 #[non_exhaustive]
@@ -249,6 +279,10 @@ pub enum Mixer {
 
 impl Mixer {
     const fn mix(self, approx: u64, displacement: u16) -> usize {
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "approx + 65535 < hash_space + 65535 <= usize::MAX"
+        )]
         match self {
             Self::Add => approx as usize + displacement as usize,
             Self::Xor => approx as usize ^ displacement as usize,
@@ -290,6 +324,10 @@ impl Mixer {
             // Iterate over keys
             for approx in approx_for_bucket {
                 // Inner unrolled loop, aka bitmask logic
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "approx + 65535 < hash_space + 65535 <= usize::MAX"
+                )]
                 let start = *approx as usize + displacement_base as usize;
                 let bit_mask =
                     unsafe { free.wrapping_add(start / 8).cast::<u64>().read_unaligned() }
@@ -298,6 +336,7 @@ impl Mixer {
             }
 
             if global_bit_mask != 0 {
+                #[allow(clippy::cast_possible_truncation, reason = "false positive")]
                 let displacement_offset = global_bit_mask.trailing_zeros() as u16;
                 return Some(displacement_base + displacement_offset);
             }
@@ -317,6 +356,10 @@ impl Mixer {
 
             // Iterate over keys
             for approx in approx_for_bucket {
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "approx + 65535 < hash_space + 65535 <= usize::MAX"
+                )]
                 let approx = *approx as usize;
                 // Inner unrolled loop, aka bitmask logic
                 let bit_mask = unsafe {
@@ -328,6 +371,7 @@ impl Mixer {
 
             // Find the first applicable displacement (i.e. such that all `free` values are 1)
             if global_bit_mask != 0 {
+                #[allow(clippy::cast_possible_truncation, reason = "false positive")]
                 let displacement_offset = global_bit_mask.trailing_zeros() as u16;
                 return Some(displacement_base + displacement_offset);
             }
@@ -359,6 +403,7 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
         let mut bit_mask = 0;
         while bit_mask < 256 {
             let mut bit_index = 0;
+            #[allow(clippy::cast_possible_truncation, reason = "bit_mask < 256")]
             while bit_index < 8 {
                 lut[xor][bit_mask] |= ((bit_mask as u8 >> bit_index) & 1) << (bit_index ^ xor);
                 bit_index += 1;

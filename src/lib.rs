@@ -108,11 +108,6 @@
     clippy::wildcard_enum_match_arm,
 )]
 #![allow(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    reason = "temporary"
-)]
-#![allow(
     clippy::inline_always,
     reason = "I'm not an idiot, this is a result of benchmarking/profiling"
 )]
