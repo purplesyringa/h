@@ -45,6 +45,7 @@ where
     ///
     /// To instantiate [`StaticSet`], use [`static_set!`].
     #[inline] // heavy, but monomorphized anyway
+    #[must_use]
     pub fn try_new(elements: Vec<T>) -> Option<Self>
     where
         Vec<Option<T>>: Into<C>,

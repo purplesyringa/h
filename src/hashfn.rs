@@ -81,7 +81,7 @@ pub trait PortableHash {
         Self: Sized,
     {
         for piece in data {
-            piece.hash(state)
+            piece.hash(state);
         }
     }
 }
@@ -163,18 +163,24 @@ impl fmt::Display for Codegen<'_, GenericHasher> {
 fn reinterpret_scalar<T: ?Sized>(x: &T) -> Option<u64> {
     let ty = typeid::of::<T>();
 
+    macro_rules! do_return {
+        ($e:expr) => {
+            #[allow(clippy::cast_lossless, reason = "generic code")]
+            #[allow(clippy::cast_sign_loss, reason = "wrap-around on signed-to-unsigned cast is the exact behavior we need, as the result is independent from the bitness of the source value")]
+            return Some($e as u64)
+        };
+    }
+
     macro_rules! imp {
         ($($ty:ty),*) => {
             $(
                 if ty == typeid::of::<$ty>() {
-                    let x = unsafe { core::mem::transmute_copy::<&T, &$ty>(&x) };
-                    return Some(*x as u64);
+                    do_return!(*unsafe { core::mem::transmute_copy::<&T, &$ty>(&x) });
                 }
                 // Scalars only implement Borrow for one level of references, so it's sound to just
                 // check &$ty and not &&$ty and so on.
                 if ty == typeid::of::<&$ty>() {
-                    let x = unsafe { core::mem::transmute_copy::<&T, &&$ty>(&x) };
-                    return Some(**x as u64);
+                    do_return!(**unsafe { core::mem::transmute_copy::<&T, &&$ty>(&x) });
                 }
             )*
         };

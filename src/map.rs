@@ -45,6 +45,7 @@ where
     ///
     /// To instantiate [`StaticMap`], use [`static_map!`].
     #[inline] // heavy, but monomorphized anyway
+    #[must_use]
     pub fn try_new(entries: Vec<(K, V)>) -> Option<Self>
     where
         Vec<Option<(K, V)>>: Into<C>,

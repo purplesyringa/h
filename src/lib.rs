@@ -53,7 +53,7 @@
     missing_docs,
     rustdoc::unescaped_backticks,
     clippy::cargo,
-    // clippy::pedantic,
+    clippy::pedantic,
     clippy::alloc_instead_of_core,
     clippy::allow_attributes_without_reason,
     // clippy::arithmetic_side_effects,
@@ -106,6 +106,11 @@
     clippy::unneeded_field_pattern,
     clippy::unused_result_ok,
     clippy::wildcard_enum_match_arm,
+)]
+#![allow(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    reason = "temporary"
 )]
 #![allow(
     clippy::inline_always,

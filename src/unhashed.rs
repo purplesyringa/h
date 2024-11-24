@@ -42,6 +42,7 @@ impl Phf {
         clippy::missing_inline_in_public_items,
         reason = "very heavy, we'd rather not copy it to every crate"
     )]
+    #[must_use]
     pub fn try_new(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         if keys.is_empty() {
             return Some(Self {
@@ -67,6 +68,7 @@ impl Phf {
     ///
     /// May return arbitrary indices for keys outside the dataset.
     #[inline]
+    #[must_use]
     pub fn hash(&self, key: u64) -> usize {
         let product = key as u128 * self.hash_space as u128;
         let approx = (product >> 64i32) as u64;
@@ -80,6 +82,7 @@ impl Phf {
     /// The index returned by `hash` is guaranteed to be less than `capacity()`, even for keys
     /// outside the training dataset.
     #[inline]
+    #[must_use]
     pub const fn capacity(&self) -> usize {
         self.hash_space_with_oob
     }
@@ -90,8 +93,8 @@ struct Buckets {
     /// Approx values of keys, ordered such that all buckets are consecutive
     approxs: Vec<u64>,
 
-    /// Buckets, groups by size. The tuple is `(Bucket, size)`.
-    buckets_by_size: Vec<Vec<(u64, usize)>>,
+    /// Buckets, grouped by size. The tuple is `(Bucket, size)`.
+    by_size: Vec<Vec<(u64, usize)>>,
 
     /// The `hash_space` parameter this object is valid under
     hash_space: usize,
@@ -123,16 +126,16 @@ impl Buckets {
         // Sort keys by bucket using a cache-friendly algorithm
         let key_to_bucket = |key: u64| key.wrapping_mul(hash_space as u64) >> bucket_shift;
         // Reduce the number of iterations
-        if bucket_count <= u16::MAX as usize {
+        if bucket_count <= 1 << 16i32 {
             radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u16);
-        } else if bucket_count <= u32::MAX as usize {
+        } else if bucket_count <= 1 << 32i32 {
             radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u32);
         } else {
             radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key));
         }
 
         // We'll store per-size bucket lists here
-        let mut buckets_by_size: Vec<Vec<(u64, usize)>> = Vec::new();
+        let mut by_size: Vec<Vec<(u64, usize)>> = Vec::new();
 
         // A manual group_by implementation, just two pointers. `product` always stores the product
         // for the currently processed element.
@@ -168,16 +171,16 @@ impl Buckets {
 
             // Add bucket to its per-size list
             let size = approx_for_bucket.len();
-            while buckets_by_size.len() <= size {
-                buckets_by_size.push(Vec::new());
+            while by_size.len() <= size {
+                by_size.push(Vec::new());
             }
-            buckets_by_size[size].push((bucket, left));
+            by_size[size].push((bucket, left));
             left = right;
         }
 
         Some(Self {
             approxs: keys,
-            buckets_by_size,
+            by_size,
             hash_space,
             bucket_count,
             bucket_shift,
@@ -188,7 +191,7 @@ impl Buckets {
     ///
     /// Yields `(Bucket, [Approx])`.
     fn iter(&self) -> impl Iterator<Item = (u64, &[u64])> {
-        self.buckets_by_size
+        self.by_size
             .iter()
             .enumerate()
             .rev()
@@ -245,7 +248,7 @@ pub enum Mixer {
 }
 
 impl Mixer {
-    const fn mix(&self, approx: u64, displacement: u16) -> usize {
+    const fn mix(self, approx: u64, displacement: u16) -> usize {
         match self {
             Self::Add => approx as usize + displacement as usize,
             Self::Xor => approx as usize ^ displacement as usize,
@@ -254,7 +257,7 @@ impl Mixer {
 
     // SAFETY: `free` as a bitmap must be large enough to fit `approx + 65535`.
     unsafe fn find_valid_displacement(
-        &self,
+        self,
         approx_for_bucket: &[u64],
         free: *const u8,
     ) -> Option<u16> {
@@ -333,7 +336,7 @@ impl Mixer {
         None
     }
 
-    fn get_hash_space_with_oob(&self, hash_space: usize, displacements: &[u16]) -> usize {
+    fn get_hash_space_with_oob(self, hash_space: usize, displacements: &[u16]) -> usize {
         let max_displacement = *displacements.iter().max().unwrap_or(&0) as usize;
         match self {
             Self::Add => hash_space.checked_add(max_displacement).unwrap(),

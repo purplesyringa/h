@@ -26,6 +26,10 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
     #[inline]
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
+    )]
     pub fn try_new<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Option<Self>
     where
         T: 'a,
