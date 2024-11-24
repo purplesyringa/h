@@ -64,7 +64,9 @@ fn build_14m_strings() {
     let testdata = read_testdata!("rockyou.txt");
     let mut entries = Vec::new();
     for (i, line) in testdata.split(|&c| c == b'\n').enumerate() {
-        entries.push((line, i));
+        if !line.is_empty() {
+            entries.push((line, i));
+        }
     }
     let phf: Map<&[u8], usize> = Map::from_entries(entries);
     assert_eq!(phf.get(&b"password"[..]), Some(&3));
