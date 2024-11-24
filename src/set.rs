@@ -19,6 +19,7 @@ pub type StaticSet<T, H = GenericHasher> = Set<T, H, &'static [Option<T>]>;
 /// By default, [`Set`] can be both built and used in runtime. Use [`StaticSet`] and [`static_set!`]
 /// when the data is available in compile time, as this results in better performance.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Set<T, H: ImperfectHasher<T> = GenericHasher, C = Vec<Option<T>>> {
     #[doc(hidden)]
     pub phf: Phf<T, H>,

@@ -19,6 +19,7 @@ pub type StaticMap<K, V, H = GenericHasher> = Map<K, V, H, &'static [Option<(K, 
 /// By default, [`Map`] can be both built and used in runtime. Use [`StaticMap`] and [`static_map!`]
 /// when the data is available in compile time, as this results in better performance.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher, C = Vec<Option<(K, V)>>> {
     #[doc(hidden)]
     pub phf: Phf<K, H>,

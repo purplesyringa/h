@@ -9,6 +9,7 @@ use core::fmt;
 /// By default, [`Phf`] can be both built and used in runtime. Use [`phf!`] when the data is
 /// available in compile time, as this results in better performance.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Phf<T, H: ImperfectHasher<T> = GenericHasher> {
     #[doc(hidden)]
     pub hash_instance: H::Instance,
@@ -34,7 +35,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         let max_hash_space = (keys.len() + 5 * percent).next_power_of_two();
 
         // Start with different load factors for different sizes. This was tuned experimentally.
-        let mut hash_space = keys.len() + percent * keys.len().div_ceil(1000000).min(5);
+        let mut hash_space = keys.len() + percent * keys.len().div_ceil(1_000_000).min(5);
 
         // Increase hash_space exponentially by 1.01 on each iteration until reaching a power of two
         // size. For good hashes, this loop should terminate soon.

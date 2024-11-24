@@ -1,9 +1,7 @@
 use super::Map;
+use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::{vec, vec::Vec};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
 
 #[test]
 fn borrow() {
@@ -29,20 +27,32 @@ fn build_10m_integers() {
     assert_eq!(phf.get(&0), None);
 }
 
-fn read_testdata(name: &str) -> impl BufRead {
-    let mut path = PathBuf::from(file!());
-    path.pop();
-    path.push(std::format!("{name}.zst"));
-    let file = File::open(path).expect("Failed to open file");
-    let decoder = zstd::Decoder::new(file).expect("Failed to decode zstd");
-    BufReader::new(decoder)
+#[cfg(feature = "std")]
+macro_rules! read_testdata {
+    ($name:literal) => {{
+        let mut path = std::path::PathBuf::from(file!());
+        path.pop();
+        path.push(concat!($name, ".zst"));
+        let file = std::fs::File::open(path).expect("Failed to open file");
+        Cow::<'static, [u8]>::from(zstd::decode_all(file).expect("Failed to decode zstd"))
+    }};
+}
+
+#[cfg(not(feature = "std"))]
+macro_rules! read_testdata {
+    ($name:literal) => {{
+        // Slower to compile, but doesn't need std
+        static DATA: &[u8] = include_bytes!(concat!($name, ".zst"));
+        Cow::<'static, [u8]>::from(zstd::decode_all(DATA).expect("Failed to decode zstd"))
+    }};
 }
 
 #[test]
 fn build_500k_strings() {
+    let testdata = read_testdata!("english.txt");
     let mut entries = Vec::new();
-    for (i, line) in read_testdata("english.txt").lines().enumerate() {
-        entries.push((line.unwrap(), i));
+    for (i, line) in testdata.split(|&c| c == b'\n').enumerate() {
+        entries.push((String::from_utf8(line.to_vec()).unwrap(), i));
     }
     let phf: Map<String, usize> = Map::try_new(entries).expect("Failed to build PHF");
     assert_eq!(phf.get("schoolroom"), Some(&351755));
@@ -52,11 +62,12 @@ fn build_500k_strings() {
 #[test]
 #[ignore = "needs a lot of memory"]
 fn build_14m_strings() {
+    let testdata = read_testdata!("rockyou.txt");
     let mut entries = Vec::new();
-    for (i, line) in read_testdata("rockyou.txt").split(b'\n').enumerate() {
-        entries.push((line.unwrap(), i));
+    for (i, line) in testdata.split(|&c| c == b'\n').enumerate() {
+        entries.push((line, i));
     }
-    let phf: Map<Vec<u8>, usize> = Map::try_new(entries).expect("Failed to build PHF");
+    let phf: Map<&[u8], usize> = Map::try_new(entries).expect("Failed to build PHF");
     assert_eq!(phf.get(&b"password"[..]), Some(&3));
     assert_eq!(phf.get(&b"gdfkghdfsjlgfd"[..]), None);
 }

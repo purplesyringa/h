@@ -1,6 +1,12 @@
 [package]
 name = "h"
+description = "Practical, efficient perfect hash functions"
 version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/purplesyringa/h"
+readme = "README.md"
+keywords = ["perfect", "hashing", "phf"]
+categories = ["data-structures", "no-std"]
 edition = "2021"
 
 [dependencies]

@@ -20,7 +20,9 @@ Some tests that need gigabytes of RAM are ignored by default; run them with `car
 
 ## Code contributions
 
-This is a small Rust project, so it's quite simple code-wise. There's a few important details to keep in mind, though.
+This is a small Rust project, so it's quite simple code-wise. Private items are documented, so you might want to use `cargo doc --document-private-items` to navigate around the code.
+
+There's a few important details to keep in mind, though.
 
 
 ### Performance
@@ -39,3 +41,8 @@ For the PHF build to success, the underlying imperfect hash has to be of a good 
 The point here is that the hash being collision free is *not* enough for the build to be successful. You might want to take a look at SMHasher results to see if the hash finalizer is good enough. This is not *necessary* as long as you know what you're doing, but it's a simple indicator otherwise.
 
 Finally, make sure that all building tests pass and don't take considerably more time than before, which would indicate worse hash quality. If you suspect that a hash might have a weak point, please state that in the PR. Ideally, add a test for that kind of data.
+
+
+### Codegen
+
+In macros, we generate code that manually fills field of the PHF. We don't want to stabilize those fields, and they're `unsafe` to touch anyway, so instead we declare them as `#[doc(hidden)] pub`. Semantically, these fields are private.

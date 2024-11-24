@@ -7,6 +7,7 @@ use core::fmt;
 ///
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Phf {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     #[doc(hidden)]
@@ -63,7 +64,7 @@ impl Phf {
     /// May return arbitrary indices for keys outside the dataset.
     pub fn hash(&self, key: u64) -> usize {
         let product = key as u128 * self.hash_space as u128;
-        let approx = (product >> 64) as u64;
+        let approx = (product >> 64i32) as u64;
         let bucket = (product as u64) >> self.bucket_shift;
         let displacement = unsafe { *self.displacements.get_unchecked(bucket as usize) };
         self.mixer.mix(approx, displacement)
@@ -86,7 +87,7 @@ struct Buckets {
     /// Buckets, groups by size. The tuple is `(Bucket, size)`.
     buckets_by_size: Vec<Vec<(u64, usize)>>,
 
-    /// The hash_space parameter this object is valid under
+    /// The `hash_space` parameter this object is valid under
     hash_space: usize,
 
     bucket_count: usize,
@@ -107,7 +108,7 @@ impl Buckets {
     ///
     /// Panics if `keys` is empty.
     fn try_new(mut keys: Vec<u64>, hash_space: usize) -> Option<Self> {
-        assert!(!keys.is_empty());
+        assert!(!keys.is_empty(), "Cannot create buckets from empty keys");
 
         // At least two buckets are required so that bucket_shift < 64
         let bucket_count = keys.len().div_ceil(Self::LAMBDA).next_power_of_two().max(2);
@@ -136,7 +137,7 @@ impl Buckets {
 
             // Replace the key with its Approx value in-place for future use. We have already
             // computed the product, so this is cheap.
-            keys[left] = (product >> 64) as u64;
+            keys[left] = (product >> 64i32) as u64;
 
             // Keep going while the key has the same bucket as the previous one
             let mut right = left + 1;
@@ -144,7 +145,7 @@ impl Buckets {
                 product = keys[right] as u128 * hash_space as u128;
                 bucket == product as u64 >> bucket_shift
             } {
-                keys[right] = (product >> 64) as u64;
+                keys[right] = (product >> 64i32) as u64;
                 right += 1;
             }
 
@@ -230,6 +231,7 @@ impl Buckets {
 
 /// Algorithm for mixing displacement with the approximate position
 #[derive(Copy, Clone, Debug)]
+#[non_exhaustive]
 pub enum Mixer {
     Add,
     Xor,
@@ -250,8 +252,14 @@ impl Mixer {
         free: *const u8,
     ) -> Option<u16> {
         match self {
-            Self::Add => Self::find_valid_displacement_add(approx_for_bucket, free),
-            Self::Xor => Self::find_valid_displacement_xor(approx_for_bucket, free),
+            Self::Add => {
+                // SAFETY: Safety requirements forwarded.
+                unsafe { Self::find_valid_displacement_add(approx_for_bucket, free) }
+            }
+            Self::Xor => {
+                // SAFETY: Safety requirements forwarded.
+                unsafe { Self::find_valid_displacement_xor(approx_for_bucket, free) }
+            }
         }
     }
 
@@ -267,7 +275,7 @@ impl Mixer {
 
             // Can't trust bits farther than the first 57, because we shift out up to 7 bits,
             // shifting in meaningless zeros
-            let mut global_bit_mask = (1 << 57) - 1;
+            let mut global_bit_mask = (1 << 57i32) - 1;
 
             // Iterate over keys
             for approx in approx_for_bucket {

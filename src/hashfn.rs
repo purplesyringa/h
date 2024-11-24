@@ -40,6 +40,7 @@ pub trait ImperfectHasher<T: ?Sized> {
 ///
 /// Currrently uses wyhash, specialized with raw multiplication for scalar types.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct GenericHasher;
 
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
@@ -56,8 +57,8 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
     }
 
     fn iter() -> impl Iterator<Item = u64> {
-        // Chosen by a fair dice roll
-        let mut rng = Rng::with_seed(0xe3206d294dd0c163);
+        // Hexadecimal digits of pi - 3
+        let mut rng = Rng::with_seed(0x243f_6a88_85a3_08d3);
         core::iter::repeat_with(move || rng.u64(..))
     }
 }
