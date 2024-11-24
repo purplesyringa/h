@@ -37,31 +37,57 @@ pub trait ImperfectHasher<T: ?Sized> {
 ///
 /// Might be slower than necessary on structured data -- implement [`ImperfectHasher`] yourself if
 /// this matters.
-///
-/// Currrently uses wyhash, specialized with raw multiplication for scalar types.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct GenericHasher;
 
+/// Implementation details of the generic hasher.
+///
+/// # Informational
+///
+/// No stability guarantees are offered. This section is informational and can only be relied upon
+/// for a given version of the crate.
+///
+/// For integers up to 64 bits long and `bool`, the hash is computed as
+/// `(key as u64).wrapping_mul(seed)`, where `s`eed is stored in the low 64 bits of the instance.
+/// This means that the hash value is invariant under extending the length of the integer type up to
+/// 64 bits.
+///
+/// For 128-bit integers, `key_low.wrapping_mul(seed_low) ^ key_high.wrapping_mul(seed_high)` is
+/// computed, where `low` and `high` are the low and the high 64 bits of the key/instance.
+///
+/// For other types, wyhash is applied to the output of [`PortableHash`]. The seed is stored in the
+/// low 64 bits of the instance.
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
-    type Instance = u64;
+    type Instance = u128;
 
     #[inline]
-    fn hash(instance: &u64, key: &T) -> u64 {
-        if let Some(x) = reinterpret_scalar(key) {
-            x.wrapping_mul(*instance)
+    fn hash(instance: &Self::Instance, key: &T) -> u64 {
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "intentional"
+        )]
+        if let Some(x) = reinterpret_scalar_up_to_64bit(key) {
+            x.wrapping_mul(*instance as u64)
+        } else if let Some(&x) = unsafe { reinterpret_scalar::<_, u128>(key) } {
+            (x as u64).wrapping_mul(*instance as u64)
+                ^ ((x >> 64i32) as u64).wrapping_mul((*instance >> 64i32) as u64)
+        } else if let Some(&x) = unsafe { reinterpret_scalar::<_, i128>(key) } {
+            (x as u64).wrapping_mul(*instance as u64)
+                ^ ((x >> 64i32) as u64).wrapping_mul((*instance >> 64i32) as u64)
         } else {
-            let mut state = wyhash::WyHash::with_seed(*instance);
+            let mut state = wyhash::WyHash::with_seed(*instance as u64);
             key.hash(&mut state);
             state.finish()
         }
     }
 
     #[inline]
-    fn iter() -> impl Iterator<Item = u64> {
+    fn iter() -> impl Iterator<Item = Self::Instance> {
         // Hexadecimal digits of pi - 3
         let mut rng = Rng::with_seed(0x243f_6a88_85a3_08d3);
-        core::iter::repeat_with(move || rng.u64(..))
+        core::iter::repeat_with(move || rng.u128(..))
     }
 }
 
@@ -160,32 +186,36 @@ impl fmt::Display for Codegen<'_, GenericHasher> {
     }
 }
 
-fn reinterpret_scalar<T: ?Sized>(x: &T) -> Option<u64> {
+/// Cast `&T` to `&U` if the types are statically known to be equal.
+///
+/// # Safety
+///
+/// The cast-to type `U` must not contain lifetimes, not even `'static`.
+unsafe fn reinterpret_scalar<T: ?Sized, U: ?Sized + 'static>(x: &T) -> Option<&U> {
     let ty = typeid::of::<T>();
-
-    macro_rules! do_return {
-        ($e:expr) => {
-            #[allow(clippy::cast_lossless, reason = "generic code")]
-            #[allow(clippy::cast_sign_loss, reason = "wrap-around on signed-to-unsigned cast is the exact behavior we need, as the result is independent from the bitness of the source value")]
-            return Some($e as u64)
-        };
+    if ty == typeid::of::<U>() {
+        return Some(unsafe { core::mem::transmute_copy::<&T, &U>(&x) });
     }
+    // Scalars only implement Borrow for one level of references, so it's sound to just check &U and
+    // not &&U and so on.
+    if ty == typeid::of::<&U>() {
+        return Some(*unsafe { core::mem::transmute_copy::<&T, &&U>(&x) });
+    }
+    None
+}
 
+fn reinterpret_scalar_up_to_64bit<T: ?Sized>(x: &T) -> Option<u64> {
     macro_rules! imp {
         ($($ty:ty),*) => {
             $(
-                if ty == typeid::of::<$ty>() {
-                    do_return!(*unsafe { core::mem::transmute_copy::<&T, &$ty>(&x) });
-                }
-                // Scalars only implement Borrow for one level of references, so it's sound to just
-                // check &$ty and not &&$ty and so on.
-                if ty == typeid::of::<&$ty>() {
-                    do_return!(**unsafe { core::mem::transmute_copy::<&T, &&$ty>(&x) });
+                if let Some(&x) = unsafe { reinterpret_scalar::<T, $ty>(x) } {
+                    #[allow(clippy::cast_lossless, reason = "generic code")]
+                    #[allow(clippy::cast_sign_loss, reason = "intentional")]
+                    return Some(x as u64);
                 }
             )*
         };
     }
     imp!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, bool);
-
     None
 }
