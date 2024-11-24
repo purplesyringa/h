@@ -5,7 +5,7 @@ use alloc::{vec, vec::Vec};
 
 #[test]
 fn borrow() {
-    let phf: Map<&u64, usize> = Map::new(vec![(&123, 0), (&456, 1)]);
+    let phf: Map<&u64, usize> = Map::from_entries(vec![(&123, 0), (&456, 1)]);
     assert_eq!(phf.get(&123), Some(&0));
     assert_eq!(phf.get(&456), Some(&1));
 }
@@ -19,7 +19,7 @@ fn build_10m_integers() {
     let entries: alloc::vec::Vec<(u64, usize)> =
         (0..10000000).map(|i: usize| (rng.u64(..), i)).collect();
 
-    let phf: Map<u64, usize> = Map::new(entries.clone());
+    let phf: Map<u64, usize> = Map::from_entries(entries.clone());
     for (k, v) in &entries {
         assert_eq!(phf.get(k), Some(v));
     }
@@ -53,7 +53,7 @@ fn build_500k_strings() {
     for (i, line) in testdata.split(|&c| c == b'\n').enumerate() {
         entries.push((String::from_utf8(line.to_vec()).unwrap(), i));
     }
-    let phf: Map<String, usize> = Map::new(entries);
+    let phf: Map<String, usize> = Map::from_entries(entries);
     assert_eq!(phf.get("schoolroom"), Some(&351755));
     assert_eq!(phf.get("gdfkghdfsjlgfd"), None);
 }
@@ -66,7 +66,7 @@ fn build_14m_strings() {
     for (i, line) in testdata.split(|&c| c == b'\n').enumerate() {
         entries.push((line, i));
     }
-    let phf: Map<&[u8], usize> = Map::new(entries);
+    let phf: Map<&[u8], usize> = Map::from_entries(entries);
     assert_eq!(phf.get(&b"password"[..]), Some(&3));
     assert_eq!(phf.get(&b"gdfkghdfsjlgfd"[..]), None);
 }

@@ -35,7 +35,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
     #[allow(clippy::arithmetic_side_effects, reason = "asserted")]
-    pub fn try_new<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Option<Self>
+    pub fn try_from_keys<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Option<Self>
     where
         T: 'a,
     {
@@ -54,7 +54,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         // Increase hash_space exponentially by 1.01 on each iteration until reaching a power of two
         // size. For good hashes, this loop should terminate soon.
         for hash_instance in H::iter() {
-            if let Some(unhashed_phf) = UnhashedPhf::try_new(
+            if let Some(unhashed_phf) = UnhashedPhf::try_from_keys(
                 keys.clone()
                     .map(|key| H::hash(&hash_instance, key))
                     .collect(),
@@ -87,11 +87,11 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         clippy::needless_pass_by_value,
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
-    pub fn new<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Self
+    pub fn from_keys<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Self
     where
         T: 'a,
     {
-        Self::try_new(keys).expect("ran out of imperfect hash family instances")
+        Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
     }
 
     /// Hash a key.

@@ -51,7 +51,7 @@ impl Phf {
         reason = "very heavy, we'd rather not copy it to every crate"
     )]
     #[must_use]
-    pub fn try_new(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
+    pub fn try_from_keys(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         if keys.is_empty() {
             return Some(Self {
                 hash_space: 0,
@@ -62,7 +62,7 @@ impl Phf {
             });
         }
 
-        let buckets = Buckets::try_new(keys, hash_space)?;
+        let buckets = Buckets::try_from_keys(keys, hash_space)?;
         // Add is faster to generate when successful -- try it first
         buckets
             .try_generate_phf(Mixer::Add)
@@ -130,7 +130,7 @@ impl Buckets {
     ///
     /// Panics if `keys` is empty, if `hash_space < keys.len()`, or if `hash_space` is close to
     /// `usize::MAX`.
-    fn try_new(mut keys: Vec<u64>, hash_space: usize) -> Option<Self> {
+    fn try_from_keys(mut keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         assert!(!keys.is_empty(), "Cannot create buckets from empty keys");
         assert!(hash_space >= keys.len(), "Hash space too small");
         assert!(

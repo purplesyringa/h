@@ -46,12 +46,12 @@ where
     /// To instantiate [`StaticSet`], use [`static_set!`].
     #[inline] // heavy, but monomorphized anyway
     #[must_use]
-    pub fn try_new(elements: Vec<T>) -> Option<Self>
+    pub fn try_from_elements(elements: Vec<T>) -> Option<Self>
     where
         Vec<Option<T>>: Into<C>,
     {
         let len = elements.len();
-        let phf = Phf::try_new(elements.iter())?;
+        let phf = Phf::try_from_keys(elements.iter())?;
         let mut data: Vec<Option<T>> = (0..phf.capacity()).map(|_| None).collect();
         scatter(elements, |element| phf.hash(element), &mut data);
         Some(Self {
@@ -74,11 +74,11 @@ where
     /// succeed.
     #[inline]
     #[must_use]
-    pub fn new(elements: Vec<T>) -> Self
+    pub fn from_elements(elements: Vec<T>) -> Self
     where
         Vec<Option<T>>: Into<C>,
     {
-        Self::try_new(elements).expect("ran out of imperfect hash family instances")
+        Self::try_from_elements(elements).expect("ran out of imperfect hash family instances")
     }
 
     /// Get a reference to the element if present.

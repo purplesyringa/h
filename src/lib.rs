@@ -33,7 +33,7 @@
 //! ```
 //!
 //! ```rust
-//! let table: h::Map<u32, usize> = h::Map::new(vec![
+//! let table: h::Map<u32, usize> = h::Map::from_entries(vec![
 //!     (2648081974, 123),
 //!     (127361636, 456),
 //!     (3593220713, 789),

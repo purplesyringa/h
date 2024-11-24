@@ -27,7 +27,7 @@ There's a few important details to keep in mind, though.
 
 ### Performance
 
-`h` is performance-oriented and tuned for large datasets, so please consider the impact of your changes on build times amd memory utilization. This is less important for codegen (`h::static_map!` and similar) and more important for runtime building (`Map::try_new` and similar).
+`h` is performance-oriented and tuned for large datasets, so please consider the impact of your changes on build times amd memory utilization. This is less important for codegen (`h::static_map!` and similar) and more important for runtime building (`Map::from_entries` and similar).
 
 The PHF building process is probabilistic and needs to be restarted with different parameters on failure. As such, it's important to cache data that can be reused between runs rather than regenerate it from scratch. For example, separating elements into buckets is independent from the choice of the mixer, so we share this data structure between mixers.
 

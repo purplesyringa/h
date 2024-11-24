@@ -46,12 +46,12 @@ where
     /// To instantiate [`StaticMap`], use [`static_map!`].
     #[inline] // heavy, but monomorphized anyway
     #[must_use]
-    pub fn try_new(entries: Vec<(K, V)>) -> Option<Self>
+    pub fn try_from_entries(entries: Vec<(K, V)>) -> Option<Self>
     where
         Vec<Option<(K, V)>>: Into<C>,
     {
         let len = entries.len();
-        let phf = Phf::try_new(entries.iter().map(|(key, _)| key))?;
+        let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
         let mut data: Vec<Option<(K, V)>> = (0..phf.capacity()).map(|_| None).collect();
         scatter(entries, |(key, _)| phf.hash(key), &mut data);
         Some(Self {
@@ -74,11 +74,11 @@ where
     /// succeed.
     #[inline]
     #[must_use]
-    pub fn new(entries: Vec<(K, V)>) -> Self
+    pub fn from_entries(entries: Vec<(K, V)>) -> Self
     where
         Vec<Option<(K, V)>>: Into<C>,
     {
-        Self::try_new(entries).expect("ran out of imperfect hash family instances")
+        Self::try_from_entries(entries).expect("ran out of imperfect hash family instances")
     }
 
     /// Get a key-value pair by key.
