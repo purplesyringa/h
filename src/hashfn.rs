@@ -93,10 +93,11 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
 
 /// Portable alternative to [`core::hash::Hash`].
 ///
-/// The same requirements as for [`core::hash::Hash`] apply, plus portability. These are:
+/// Much like with [`core::hash::Hash`], `Eq`-equal objects must imply equal data passed to the
+/// hasher, and the data must be prefix-free.
 ///
-/// - `Eq`-equal objects must imply equal data passed to the hasher
-/// - Data passed to the hasher must be prefix-free
+/// In addition, the written data must be portable between platforms. For example, directly writing
+/// `usize` into the hasher is a bad idea because of possible differences in pointer size.
 pub trait PortableHash {
     /// Write a value into the hasher.
     fn hash<H: Hasher>(&self, state: &mut H);
@@ -148,12 +149,24 @@ impl_write! {
     u16 => write_u16,
     u32 => write_u32,
     u64 => write_u64,
-    usize => write_usize,
     i8 => write_i8,
     i16 => write_i16,
     i32 => write_i32,
     i64 => write_i64,
-    isize => write_isize,
+}
+
+impl PortableHash for usize {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(*self as u64);
+    }
+}
+
+impl PortableHash for isize {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_i64(*self as i64);
+    }
 }
 
 macro_rules! impl_str {
