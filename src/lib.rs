@@ -56,7 +56,7 @@
     clippy::pedantic,
     clippy::alloc_instead_of_core,
     clippy::allow_attributes_without_reason,
-    // clippy::arithmetic_side_effects,
+    clippy::arithmetic_side_effects,
     clippy::as_underscore,
     clippy::assertions_on_result_states,
     clippy::clone_on_ref_ptr,

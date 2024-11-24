@@ -25,22 +25,31 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     ///
     /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `keys` contains more than `isize::MAX / 2` elements.
     #[inline]
     #[allow(
         clippy::needless_pass_by_value,
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
+    #[allow(clippy::arithmetic_side_effects, reason = "asserted")]
     pub fn try_new<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Option<Self>
     where
         T: 'a,
     {
+        // Asserting this is enough to guarantee that `hash_space` never overflows.
+        assert!(keys.len() <= isize::MAX as usize / 2, "Too many keys");
+
         let percent = keys.len().div_ceil(100);
 
         // Don't let hash_space grow beyond this
         let max_hash_space = (keys.len() + 5 * percent).next_power_of_two();
 
         // Start with different load factors for different sizes. This was tuned experimentally.
-        let mut hash_space = keys.len() + percent * keys.len().div_ceil(1_000_000).min(5);
+        let coeff = keys.len().div_ceil(1_000_000).min(5);
+        let mut hash_space = keys.len() + coeff * percent;
 
         // Increase hash_space exponentially by 1.01 on each iteration until reaching a power of two
         // size. For good hashes, this loop should terminate soon.

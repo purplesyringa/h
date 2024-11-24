@@ -1,7 +1,15 @@
+#![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
+
 use super::codegen::Codegen;
 use alloc::borrow::Cow;
 use alloc::{vec, vec::Vec};
 use core::fmt;
+
+// We assume that usize is at most 64-bit in many places.
+const _: () = assert!(
+    size_of::<usize>() <= size_of::<u64>(),
+    "I want your computer."
+);
 
 /// A perfect hash function.
 ///
@@ -120,9 +128,11 @@ impl Buckets {
     ///
     /// # Panics
     ///
-    /// Panics if `keys` is empty.
+    /// Panics if `keys` is empty, if `hash_space < keys.len()`, or if `hash_space` is close to
+    /// `usize::MAX`.
     fn try_new(mut keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         assert!(!keys.is_empty(), "Cannot create buckets from empty keys");
+        assert!(hash_space >= keys.len(), "Hash space too small");
         assert!(
             hash_space.checked_add(u16::MAX as usize).is_some(),
             "hash_space too large"
@@ -383,9 +393,9 @@ impl Mixer {
     fn get_hash_space_with_oob(self, hash_space: usize, displacements: &[u16]) -> usize {
         let max_displacement = *displacements.iter().max().unwrap_or(&0) as usize;
         match self {
-            Self::Add => hash_space.checked_add(max_displacement).unwrap(),
+            Self::Add => hash_space + max_displacement,
             Self::Xor => {
-                let x = hash_space.checked_sub(1).unwrap();
+                let x = hash_space - 1;
                 let y = max_displacement;
                 let bound = (x & y).checked_ilog2().unwrap_or(0);
                 let max_xor = x | y | ((1 << bound) - 1);
