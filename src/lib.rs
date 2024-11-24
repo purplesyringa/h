@@ -49,8 +49,8 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(
-    missing_crate_level_docs,
     missing_docs,
+    rustdoc::missing_crate_level_docs,
     rustdoc::unescaped_backticks,
     clippy::cargo,
     clippy::pedantic,
@@ -79,6 +79,7 @@
     clippy::missing_const_for_fn,
     // clippy::missing_docs_in_private_items,
     clippy::missing_inline_in_public_items,
+    clippy::missing_safety_doc,
     clippy::mixed_read_write_in_expression,
     clippy::multiple_unsafe_ops_per_block,
     clippy::mutex_atomic,

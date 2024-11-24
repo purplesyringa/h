@@ -236,7 +236,7 @@ impl Buckets {
     /// Hash space must be at least somewhat larger than the number of keys.
     fn try_generate_phf(&self, mixer: Mixer) -> Option<Phf> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
-        let alloc = self.hash_space.checked_add(u16::MAX as usize).unwrap();
+        let alloc = self.hash_space + u16::MAX as usize;
         let mut free = vec![u8::MAX; alloc.div_ceil(8)];
 
         // We'll fill this per-bucket array during the course of the algorithm
@@ -299,7 +299,14 @@ impl Mixer {
         }
     }
 
-    // SAFETY: `free` as a bitmap must be large enough to fit `approx + 65535`.
+    /// Find a valid displacement.
+    ///
+    /// Returns `displacement` such that `mix(approx, displacement)` is marked as free in the
+    /// bitmap for each `approx` in the list. On failure, returns `None`.
+    ///
+    /// # Safety
+    ///
+    /// `free` as a bitmap must be large enough to fit `approx + 65535`.
     unsafe fn find_valid_displacement(
         self,
         approx_for_bucket: &[u64],
@@ -317,7 +324,14 @@ impl Mixer {
         }
     }
 
-    // SAFETY: As for `find_valid_displacement`.
+    /// Find a valid displacement for the [`Self::Add`] mixer.
+    ///
+    /// Returns `displacement` such that `mix(approx, displacement)` is marked as free in the
+    /// bitmap for each `approx` in the list. On failure, returns `None`.
+    ///
+    /// # Safety
+    ///
+    /// `free` as a bitmap must be large enough to fit `approx + 65535`.
     unsafe fn find_valid_displacement_add(
         approx_for_bucket: &[u64],
         free: *const u8,
@@ -355,7 +369,14 @@ impl Mixer {
         None
     }
 
-    // SAFETY: As for `find_valid_displacement`.
+    /// Find a valid displacement for the [`Self::Xor`] mixer.
+    ///
+    /// Returns `displacement` such that `mix(approx, displacement)` is marked as free in the
+    /// bitmap for each `approx` in the list. On failure, returns `None`.
+    ///
+    /// # Safety
+    ///
+    /// `free` as a bitmap must be large enough to fit `approx + 65535`.
     unsafe fn find_valid_displacement_xor(
         approx_for_bucket: &[u64],
         free: *const u8,
