@@ -47,4 +47,4 @@ Finally, make sure that all building tests pass and don't take considerably more
 
 ### Codegen
 
-In macros, we generate code that manually fills field of the PHF. We don't want to stabilize those fields, and they're `unsafe` to touch anyway, so instead we declare them as `#[doc(hidden)] pub`. Semantically, these fields are private.
+We generate code that manually fills fields of the PHF by calling the `from_raw_parts` method. We don't want to stabilize it, and semantically it's `unsafe`, so instead we declare it as `#[doc(hidden)]`.

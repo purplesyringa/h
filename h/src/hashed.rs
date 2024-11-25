@@ -3,6 +3,8 @@ use super::{
     unhashed::Phf as UnhashedPhf,
     GenericHasher, ImperfectHasher,
 };
+use proc_macro2::TokenStream;
+use quote::quote;
 
 /// A perfect hash function.
 ///
@@ -14,13 +16,21 @@ use super::{
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Phf<T, H: ImperfectHasher<T> = GenericHasher> {
-    #[doc(hidden)]
-    pub hash_instance: H::Instance,
-    #[doc(hidden)]
-    pub unhashed_phf: UnhashedPhf,
+    hash_instance: H::Instance,
+    unhashed_phf: UnhashedPhf,
 }
 
 impl<T, H: ImperfectHasher<T>> Phf<T, H> {
+    #[doc(hidden)]
+    #[inline]
+    #[must_use]
+    pub const fn from_raw_parts(hash_instance: H::Instance, unhashed_phf: UnhashedPhf) -> Self {
+        Self {
+            hash_instance,
+            unhashed_phf,
+        }
+    }
+
     /// Try to generate a perfect hash function.
     ///
     /// `keys` must not contain duplicates. It's an exact-size cloneable iterator rather than
@@ -128,12 +138,10 @@ where
     H::Instance: Codegen,
 {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
-        gen.write_path("h::Phf")?;
-        gen.write_code("{hash_instance:")?;
-        gen.write(&self.hash_instance)?;
-        gen.write_code(",unhashed_phf:")?;
-        gen.write(&self.unhashed_phf)?;
-        gen.write_code("}")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let phf = gen.path("h::Phf");
+        let hash_instance = gen.piece(&self.hash_instance);
+        let unhashed_phf = gen.piece(&self.unhashed_phf);
+        quote!(#phf::from_raw_parts(#hash_instance, #unhashed_phf))
     }
 }

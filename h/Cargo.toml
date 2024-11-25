@@ -11,6 +11,8 @@ edition = "2021"
 
 [dependencies]
 fastrand = { version = "2.2.0", default-features = false }
+proc-macro2 = "1.0.92"
+quote = "1.0.37"
 radsort = "0.1.1"
 rapidhash = "1.1.0"
 typeid = "1.0.2"

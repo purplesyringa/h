@@ -1,14 +1,15 @@
 #![cfg(feature = "enabled")]
 
 use h::codegen::CodeGenerator;
-use std::io::BufWriter;
 use std::path::PathBuf;
 
 fn main() {
+    println!("cargo::rerun-if-changed=build.rs");
+
     let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     path.push("..");
     path.push("tests");
-    path.push("rockyou.txt.zst");
+    path.push("english.txt.zst");
     let file = std::fs::File::open(path).expect("Failed to open file");
     let testdata = zstd::decode_all(file).expect("Failed to decode zstd");
 
@@ -18,13 +19,11 @@ fn main() {
             entries.push((line, i));
         }
     }
+    entries.truncate(50000);
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    // let mut rockyou_h =
-    //     BufWriter::new(std::fs::File::create(out_dir.join("rockyou_h.rs")).unwrap());
-    // let map = h::Map::<&[u8], usize>::from_entries(entries.clone());
-    // let mut gen = CodeGenerator::new(&mut rockyou_h).unwrap();
-    // gen.write(&map).unwrap();
-    // gen.finish().unwrap();
+    let h_map = h::Map::<&[u8], usize>::from_entries(entries.clone());
+    let h_code = CodeGenerator::new().generate(&h_map);
+    std::fs::write(out_dir.join("english_h.rs"), h_code.to_string()).unwrap();
 }

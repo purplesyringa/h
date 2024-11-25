@@ -7,6 +7,8 @@ use alloc::vec::Vec;
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::ops::Deref;
+use proc_macro2::TokenStream;
+use quote::quote;
 
 /// A constant-time perfect hash map.
 ///
@@ -24,14 +26,10 @@ pub type StaticMap<K, V, H = GenericHasher> = Map<K, V, H, &'static [Option<(K, 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher, C = Vec<Option<(K, V)>>> {
-    #[doc(hidden)]
-    pub phf: Phf<K, H>,
-    #[doc(hidden)]
-    pub data: C,
-    #[doc(hidden)]
-    pub len: usize,
-    #[doc(hidden)]
-    pub _marker: PhantomData<(K, V)>,
+    phf: Phf<K, H>,
+    data: C,
+    len: usize,
+    marker: PhantomData<(K, V)>,
 }
 
 impl<K, V, H, C> Map<K, V, H, C>
@@ -39,6 +37,18 @@ where
     H: ImperfectHasher<K>,
     C: Deref<Target = [Option<(K, V)>]>,
 {
+    #[doc(hidden)]
+    #[inline]
+    #[must_use]
+    pub const fn from_raw_parts(phf: Phf<K, H>, data: C, len: usize) -> Self {
+        Self {
+            phf,
+            data,
+            len,
+            marker: PhantomData,
+        }
+    }
+
     /// Try to generate a perfect hash map.
     ///
     /// There must not be duplicate keys in the input.
@@ -61,7 +71,7 @@ where
             phf,
             data: data.into(),
             len,
-            _marker: PhantomData,
+            marker: PhantomData,
         })
     }
 
@@ -165,16 +175,11 @@ where
     Phf<K, H>: Codegen,
 {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
-        gen.write_path("h::StaticMap")?;
-        gen.write_code("{phf:")?;
-        gen.write(&self.phf)?;
-        gen.write_code(",data:&")?;
-        gen.write(&*self.data)?;
-        gen.write_code(",len:")?;
-        gen.write(&self.len)?;
-        gen.write_code(",_marker:")?;
-        gen.write(&self._marker)?;
-        gen.write_code("}")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let static_map = gen.path("h::StaticMap");
+        let phf = gen.piece(&self.phf);
+        let data = gen.piece(&&*self.data);
+        let len = gen.piece(&self.len);
+        quote!(#static_map::from_raw_parts(#phf, #data, #len))
     }
 }

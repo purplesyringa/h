@@ -3,6 +3,8 @@
 use super::codegen::{CodeGenerator, Codegen};
 use alloc::borrow::Cow;
 use alloc::{vec, vec::Vec};
+use proc_macro2::TokenStream;
+use quote::quote;
 
 // We assume that usize is at most 64-bit in many places.
 const _: () = assert!(
@@ -17,27 +19,41 @@ const _: () = assert!(
 #[non_exhaustive]
 pub struct Phf {
     /// Size of the hash table, without taking out-of-bounds displacements into account
-    #[doc(hidden)]
-    pub hash_space: usize,
+    hash_space: usize,
 
     /// Size of the hash table, taking out-of-bounds displacements into account
-    #[doc(hidden)]
-    pub hash_space_with_oob: usize,
+    hash_space_with_oob: usize,
 
     /// `64 - ilog2(bucket_count)`
-    #[doc(hidden)]
-    pub bucket_shift: u32,
+    bucket_shift: u32,
 
     /// Per-bucket displacement values
-    #[doc(hidden)]
-    pub displacements: Cow<'static, [u16]>,
+    displacements: Cow<'static, [u16]>,
 
     /// How the displacement is mixed into the approximate position
-    #[doc(hidden)]
-    pub mixer: Mixer,
+    mixer: Mixer,
 }
 
 impl Phf {
+    #[doc(hidden)]
+    #[inline]
+    #[must_use]
+    pub const fn from_raw_parts(
+        hash_space: usize,
+        hash_space_with_oob: usize,
+        bucket_shift: u32,
+        displacements: Cow<'static, [u16]>,
+        mixer: Mixer,
+    ) -> Self {
+        Self {
+            hash_space,
+            hash_space_with_oob,
+            bucket_shift,
+            displacements,
+            mixer,
+        }
+    }
+
     /// Generate a perfect hash function.
     ///
     /// `hash_space` must be at least somewhat higher than `keys.len()`. `keys` are expected to
@@ -447,29 +463,32 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
 
 impl Codegen for Phf {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
-        gen.write_path("h::low_level::UnhashedPhf")?;
-        gen.write_code("{hash_space:")?;
-        gen.write(&self.hash_space)?;
-        gen.write_code(",hash_space_with_oob:")?;
-        gen.write(&self.hash_space_with_oob)?;
-        gen.write_code(",bucket_shift:")?;
-        gen.write(&self.bucket_shift)?;
-        gen.write_code(",displacements:")?;
-        gen.write(&self.displacements)?;
-        gen.write_code(",mixer:")?;
-        gen.write(&self.mixer)?;
-        gen.write_code("}")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let unhashed_phf = gen.path("h::low_level::UnhashedPhf");
+        let hash_space = gen.piece(&self.hash_space);
+        let hash_space_with_oob = gen.piece(&self.hash_space_with_oob);
+        let bucket_shift = gen.piece(&self.bucket_shift);
+        let displacements = gen.piece(&self.displacements);
+        let mixer = gen.piece(&self.mixer);
+        quote!(
+            #unhashed_phf::from_raw_parts(
+                #hash_space,
+                #hash_space_with_oob,
+                #bucket_shift,
+                #displacements,
+                #mixer,
+            )
+        )
     }
 }
 
 impl Codegen for Mixer {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
-        gen.write_path("h::low_level::Mixer")?;
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let mixer = gen.path("h::low_level::Mixer");
         match self {
-            Mixer::Add => gen.write_code("::Add"),
-            Mixer::Xor => gen.write_code("::Xor"),
+            Mixer::Add => quote!(#mixer::Add),
+            Mixer::Xor => quote!(#mixer::Xor),
         }
     }
 }

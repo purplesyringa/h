@@ -26,38 +26,30 @@
 use alloc::borrow::{Cow, ToOwned};
 use alloc::format;
 use alloc::string::String;
+use alloc::vec::Vec;
+use proc_macro2::{Ident, Literal, TokenStream, TokenTree};
+use quote::{format_ident, quote};
 use std::collections::{HashMap, HashSet};
-use std::io::{Result, Write};
 
 /// Code generator.
-pub struct CodeGenerator<'a> {
-    writer: &'a mut dyn Write,
-    crate_paths: HashMap<String, String>,
-    path_to_alias: HashMap<String, String>,
+pub struct CodeGenerator {
+    crate_paths: HashMap<String, TokenStream>,
+    path_to_alias: HashMap<String, Ident>,
     aliases: HashSet<String>,
     alloc_wanted: bool,
 }
 
-impl<'a> CodeGenerator<'a> {
+impl CodeGenerator {
     /// Create a code generator with default settings.
-    ///
-    /// # Errors
-    ///
-    /// May fail if the underlying [`Write`](std::io::Write) implementation fails.
     #[inline]
-    pub fn new(writer: &'a mut dyn Write) -> Result<Self> {
-        let mut gen = Self {
-            writer,
-            crate_paths: HashMap::from([
-                ("h".into(), "::h".into()),
-                ("alloc".into(), "_Alloc".into()),
-            ]),
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            crate_paths: HashMap::from([("h".into(), quote!(::h))]),
             path_to_alias: HashMap::new(),
             aliases: HashSet::new(),
             alloc_wanted: false,
-        };
-        gen.write_code("{let __codegen_value=")?;
-        Ok(gen)
+        }
     }
 
     /// Configure name-to-path mapping for crates.
@@ -65,59 +57,75 @@ impl<'a> CodeGenerator<'a> {
     /// By default, `h` is mapped to `::h`. Reconfiguring this might be necessary if you want to
     /// generate code with `h` from a proc-macro.
     #[inline]
-    pub fn with_crate(&mut self, name: &str, path: &str) {
-        self.crate_paths.insert(name.into(), path.into());
+    pub fn with_crate(&mut self, name: &str, path: TokenStream) {
+        self.crate_paths.insert(name.into(), path);
     }
 
-    /// Append literal code.
-    ///
-    /// # Errors
-    ///
-    /// May fail if the underlying [`Write`](std::io::Write) implementation fails.
-    #[inline]
-    pub fn write_code(&mut self, piece: &str) -> Result<()> {
-        self.writer.write_all(piece.as_bytes())
-    }
-
-    /// Append a `b"..."` literal.
-    ///
-    /// # Errors
-    ///
-    /// May fail if the underlying [`Write`](std::io::Write) implementation fails.
+    /// Turn a value into code.
     #[inline]
     #[allow(clippy::missing_panics_doc, reason = "false positive")]
-    pub fn write_byte_string(&mut self, bytes: &[u8]) -> Result<()> {
-        self.write_code("b\"")?;
-        for byte in bytes {
-            for c in core::ascii::escape_default(*byte) {
-                self.write_code(core::str::from_utf8(&[c]).unwrap())?;
-            }
+    pub fn generate<T: ?Sized + Codegen>(mut self, value: &T) -> TokenStream {
+        let value = self.piece(value);
+
+        let mut crate_paths = core::mem::take(&mut self.crate_paths);
+        let extern_crate_alloc = (self.alloc_wanted
+            && crate_paths
+                .insert("alloc".to_owned(), quote!(_Alloc))
+                .is_none())
+        .then_some(quote!(
+            extern crate alloc as _Alloc;
+        ));
+
+        let mut uses = Vec::new();
+        for (path, alias) in core::mem::take(&mut self.path_to_alias) {
+            let mut components = path.split("::");
+
+            let crate_name = components.next().unwrap();
+            let crate_path = if let Some(crate_path) = crate_paths.get(crate_name) {
+                crate_path.clone()
+            } else {
+                let ident = format_ident!("{crate_name}");
+                quote!(:: #ident)
+            };
+            let components = components.map(|component| format_ident!("{component}"));
+
+            uses.push(quote!(use #crate_path #(:: #components)* as #alias;));
         }
-        self.write_code("\"")
+
+        quote!(
+            {
+                let __codegen_value = #value;
+                #extern_crate_alloc
+                #(#uses)*
+                __codegen_value
+            }
+        )
     }
 
-    /// Append a resolved path.
+    /// Turn a value into a recursively useable piece of code.
+    #[inline]
+    pub fn piece<T: ?Sized + Codegen>(&mut self, piece: &T) -> TokenStream {
+        piece.generate_piece(self)
+    }
+
+    /// Resolve a path.
     ///
-    /// The path must look like `crate::path::inside::it`, or just `crate`. Semantically, this path
-    /// must be `use`able. This is different from `write_code` for two reasons:
+    /// The input string must look like `crate::path::inside::it`, or just `crate`. Semantically,
+    /// this path must be `use`able. This is different from using the path directly for two reasons:
     ///
     /// - This method resolves crates according to the paths configured by
     ///   [`CodeGenerator::with_crate`].
     /// - This method replaces long paths with short aliases imported just once with `use`, reducing
     ///   code size.
-    ///
-    /// # Errors
-    ///
-    /// May fail if the underlying [`Write`](std::io::Write) implementation fails.
     #[inline]
     #[allow(
         clippy::maybe_infinite_iter,
         clippy::missing_panics_doc,
         reason = "false positive"
     )]
-    pub fn write_path(&mut self, path: &str) -> Result<()> {
+    pub fn path(&mut self, path: &str) -> TokenStream {
         if let Some(alias) = self.path_to_alias.get(path) {
-            return self.writer.write_all(alias.as_bytes());
+            return quote!(#alias);
         }
 
         if path.split_once("..").unwrap_or((path, "")).0 == "alloc" {
@@ -132,137 +140,105 @@ impl<'a> CodeGenerator<'a> {
                 .unwrap();
         }
 
-        self.write_code(&alias)?;
-        self.path_to_alias.insert(path.to_owned(), alias);
-        Ok(())
+        let alias = format_ident!("{alias}");
+        self.path_to_alias.insert(path.to_owned(), alias.clone());
+        quote!(#alias)
     }
+}
 
-    /// Append a codegen-able object.
-    ///
-    /// # Errors
-    ///
-    /// May fail if the underlying [`Write`](std::io::Write) implementation fails.
+impl Default for CodeGenerator {
     #[inline]
-    pub fn write<T: ?Sized + Codegen>(&mut self, piece: &T) -> Result<()> {
-        piece.generate_into(self)
-    }
-
-    /// Flush all the unwritten code to the writer.
-    ///
-    /// # Errors
-    ///
-    /// May fail if the underlying [`Write`](std::io::Write) implementation fails.
-    #[inline]
-    pub fn finish(mut self) -> Result<()> {
-        self.write_code(";")?;
-
-        let mut crate_paths = core::mem::take(&mut self.crate_paths);
-
-        if self.alloc_wanted
-            && crate_paths
-                .insert("alloc".to_owned(), "_Alloc".to_owned())
-                .is_none()
-        {
-            self.write_code("extern crate alloc as _Alloc;")?;
-        }
-
-        for (path, alias) in core::mem::take(&mut self.path_to_alias) {
-            let (crate_name, rest) = path.split_at(path.find("::").unwrap_or(path.len()));
-
-            self.write_code("use ")?;
-            if let Some(crate_path) = crate_paths.get(crate_name) {
-                self.write_code(crate_path)?;
-            } else {
-                self.write_code("::")?;
-                self.write_code(crate_name)?;
-            }
-            self.write_code(rest)?;
-            self.write_code(" as ")?;
-            self.write_code(&alias)?;
-            self.write_code(";")?;
-        }
-
-        self.write_code("__codegen_value}")
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 /// Values that can be turned into code.
 pub trait Codegen {
-    /// Append code into the code generator.
+    /// Emit a piece of code corresponding to this value.
     ///
-    /// # Errors
-    ///
-    /// May fail if the underlying [`Write`](std::io::Write) implementation fails.
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()>;
+    /// This method is only supposed to be called recursively from [`Codegen`] implementations. Call
+    /// the [`generate`] method on [`CodeGenerator`] to produce the complete code output for
+    /// a single value.
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream;
 }
 
-macro_rules! suffix_literal {
-    ($($ty:ty)*) => {
+macro_rules! literal {
+    ($($ty:ty => $method:ident,)*) => {
         $(
             impl Codegen for $ty {
                 #[inline]
-                fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
-                    gen.write_code(&format!("{}", self))?;
-                    gen.write_code(stringify!($ty))
+                fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
+                    TokenTree::Literal(Literal::$method(*self)).into()
                 }
             }
         )*
     };
 }
 
-suffix_literal!(u8 u16 u32 u64 u128 usize i8 i16 i32 i64 i128 isize f32 f64);
+literal! {
+    u8 => u8_suffixed,
+    u16 => u16_suffixed,
+    u32 => u32_suffixed,
+    u64 => u64_suffixed,
+    u128 => u128_suffixed,
+    usize => usize_suffixed,
+    i8 => i8_suffixed,
+    i16 => i16_suffixed,
+    i32 => i32_suffixed,
+    i64 => i64_suffixed,
+    i128 => i128_suffixed,
+    isize => isize_suffixed,
+    f32 => f32_suffixed,
+    f64 => f64_suffixed,
+}
 
 impl Codegen for bool {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
-        gen.write_code(&format!("{self}"))
+    fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
+        TokenTree::Ident(format_ident!("{self}")).into()
     }
 }
 
 impl<T: ?Sized> Codegen for core::marker::PhantomData<T> {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
-        gen.write_path("core::marker::PhantomData")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        gen.path("core::marker::PhantomData")
     }
 }
 
 impl<T: Codegen> Codegen for alloc::vec::Vec<T> {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
         if let Some(bytes) = as_byte_slice(&**self) {
-            gen.write_path("alloc::vec::Vec")?;
-            gen.write_code("::from(")?;
-            gen.write_byte_string(bytes)?;
-            gen.write_code(")")
+            let vec = gen.path("alloc::vec::Vec");
+            let bytes = Literal::byte_string(bytes);
+            quote!(#vec::from(#bytes))
         } else {
-            gen.write_path("alloc::vec")?;
-            gen.write_code("!")?;
-            gen.write(&**self)
+            let vec = gen.path("alloc::vec");
+            let rest = gen.piece(&**self);
+            quote!(#vec! #rest)
         }
     }
 }
 
 impl<T: Codegen> Codegen for [T] {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
-        gen.write_code("[")?;
-        for element in self {
-            gen.write(element)?;
-            gen.write_code(",")?;
-        }
-        gen.write_code("]")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let elements = self.iter().map(|element| gen.piece(element));
+        quote!([#(#elements),*])
     }
 }
 
 impl<T: ?Sized + Codegen> Codegen for &T {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
         if let Some(bytes) = as_byte_slice(*self) {
-            gen.write_byte_string(bytes)?;
-            gen.write_code(" as &[u8]")
+            let bytes = Literal::byte_string(bytes);
+            quote!(#bytes as &[u8])
         } else {
-            gen.write_code("&")?;
-            gen.write(*self)
+            let target = gen.piece(*self);
+            quote!(&#target)
         }
     }
 }
@@ -278,24 +254,22 @@ fn as_byte_slice<T: ?Sized>(object: &T) -> Option<&[u8]> {
 /// Always converts to a borrowed version, making the generated code usable in a `const` context.
 impl<T: ?Sized + ToOwned + Codegen> Codegen for Cow<'_, T> {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
-        gen.write_path("h::low_level::Cow::Borrowed")?;
-        gen.write_code("(&")?;
-        gen.write(self.as_ref())?;
-        gen.write_code(")")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let borrowed = gen.path("h::low_level::Cow::Borrowed");
+        let target = gen.piece(self.as_ref());
+        quote!(#borrowed(&#target))
     }
 }
 
 impl<T: Codegen> Codegen for Option<T> {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
         match &self {
-            None => gen.write_path("core::option::Option::None"),
+            None => gen.path("core::option::Option::None"),
             Some(value) => {
-                gen.write_path("core::option::Option::Some")?;
-                gen.write_code("(")?;
-                gen.write(value)?;
-                gen.write_code(")")
+                let some = gen.path("core::option::Option::Some");
+                let value = gen.piece(value);
+                quote!(#some(#value))
             }
         }
     }
@@ -303,18 +277,16 @@ impl<T: Codegen> Codegen for Option<T> {
 
 impl Codegen for () {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
-        gen.write_code("()")
+    fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
+        quote!(())
     }
 }
 
 impl<T: Codegen, U: ?Sized + Codegen> Codegen for (T, U) {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator<'_>) -> Result<()> {
-        gen.write_code("(")?;
-        gen.write(&self.0)?;
-        gen.write_code(",")?;
-        gen.write(&self.1)?;
-        gen.write_code(")")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let a = gen.piece(&self.0);
+        let b = gen.piece(&self.1);
+        quote!((#a, #b))
     }
 }

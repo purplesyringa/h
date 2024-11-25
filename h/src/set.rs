@@ -7,6 +7,8 @@ use alloc::vec::Vec;
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::ops::Deref;
+use proc_macro2::TokenStream;
+use quote::quote;
 
 /// A constant-time perfect hash set.
 ///
@@ -24,14 +26,10 @@ pub type StaticSet<T, H = GenericHasher> = Set<T, H, &'static [Option<T>]>;
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Set<T, H: ImperfectHasher<T> = GenericHasher, C = Vec<Option<T>>> {
-    #[doc(hidden)]
-    pub phf: Phf<T, H>,
-    #[doc(hidden)]
-    pub data: C,
-    #[doc(hidden)]
-    pub len: usize,
-    #[doc(hidden)]
-    pub _marker: PhantomData<T>,
+    phf: Phf<T, H>,
+    data: C,
+    len: usize,
+    marker: PhantomData<T>,
 }
 
 impl<T, H, C> Set<T, H, C>
@@ -39,6 +37,18 @@ where
     H: ImperfectHasher<T>,
     C: Deref<Target = [Option<T>]>,
 {
+    #[doc(hidden)]
+    #[inline]
+    #[must_use]
+    pub const fn from_raw_parts(phf: Phf<T, H>, data: C, len: usize) -> Self {
+        Self {
+            phf,
+            data,
+            len,
+            marker: PhantomData,
+        }
+    }
+
     /// Try to generate a perfect hash set.
     ///
     /// There must not be duplicate elements in the input.
@@ -61,7 +71,7 @@ where
             phf,
             data: data.into(),
             len,
-            _marker: PhantomData,
+            marker: PhantomData,
         })
     }
 
@@ -134,16 +144,11 @@ where
     Phf<T, H>: Codegen,
 {
     #[inline]
-    fn generate_into(&self, gen: &mut CodeGenerator) -> std::io::Result<()> {
-        gen.write_path("h::StaticSet")?;
-        gen.write_code("{phf:")?;
-        gen.write(&self.phf)?;
-        gen.write_code(",data:&")?;
-        gen.write(&*self.data)?;
-        gen.write_code(",len:")?;
-        gen.write(&self.len)?;
-        gen.write_code(",_marker:")?;
-        gen.write(&self._marker)?;
-        gen.write_code("}")
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let static_set = gen.path("h::StaticSet");
+        let phf = gen.piece(&self.phf);
+        let data = gen.piece(&&*self.data);
+        let len = gen.piece(&self.len);
+        quote!(#static_set::from_raw_parts(#phf, #data, #len))
     }
 }
