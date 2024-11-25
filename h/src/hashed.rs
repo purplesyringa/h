@@ -1,10 +1,7 @@
 use super::{
-    codegen::{CodeGenerator, Codegen},
     hash::{GenericHasher, ImperfectHasher},
     unhashed::Phf as UnhashedPhf,
 };
-use proc_macro2::TokenStream;
-use quote::quote;
 
 /// A perfect hash function.
 ///
@@ -133,15 +130,16 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     }
 }
 
-impl<T, H: ImperfectHasher<T>> Codegen for Phf<T, H>
+#[cfg(feature = "codegen")]
+impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Phf<T, H>
 where
-    H::Instance: Codegen,
+    H::Instance: super::codegen::Codegen,
 {
     #[inline]
-    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let phf = gen.path("h::Phf");
         let hash_instance = gen.piece(&self.hash_instance);
         let unhashed_phf = gen.piece(&self.unhashed_phf);
-        quote!(#phf::from_raw_parts(#hash_instance, #unhashed_phf))
+        quote::quote!(#phf::from_raw_parts(#hash_instance, #unhashed_phf))
     }
 }

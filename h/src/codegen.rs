@@ -1,3 +1,5 @@
+#![cfg(feature = "codegen")]
+
 //! Code generation.
 //!
 //! This module is useful for generating tables programmatically in `build.rs`.

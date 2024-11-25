@@ -1,10 +1,7 @@
 #![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
 
-use super::codegen::{CodeGenerator, Codegen};
 use alloc::borrow::Cow;
 use alloc::{vec, vec::Vec};
-use proc_macro2::TokenStream;
-use quote::quote;
 
 // We assume that usize is at most 64-bit in many places.
 const _: () = assert!(
@@ -461,16 +458,17 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
     lut
 };
 
-impl Codegen for Phf {
+#[cfg(feature = "codegen")]
+impl super::codegen::Codegen for Phf {
     #[inline]
-    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let unhashed_phf = gen.path("h::low_level::UnhashedPhf");
         let hash_space = gen.piece(&self.hash_space);
         let hash_space_with_oob = gen.piece(&self.hash_space_with_oob);
         let bucket_shift = gen.piece(&self.bucket_shift);
         let displacements = gen.piece(&self.displacements);
         let mixer = gen.piece(&self.mixer);
-        quote!(
+        quote::quote!(
             #unhashed_phf::from_raw_parts(
                 #hash_space,
                 #hash_space_with_oob,
@@ -482,13 +480,14 @@ impl Codegen for Phf {
     }
 }
 
-impl Codegen for Mixer {
+#[cfg(feature = "codegen")]
+impl super::codegen::Codegen for Mixer {
     #[inline]
-    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let mixer = gen.path("h::low_level::Mixer");
         match self {
-            Mixer::Add => quote!(#mixer::Add),
-            Mixer::Xor => quote!(#mixer::Xor),
+            Mixer::Add => quote::quote!(#mixer::Add),
+            Mixer::Xor => quote::quote!(#mixer::Xor),
         }
     }
 }

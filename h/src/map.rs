@@ -1,5 +1,4 @@
 use super::{
-    codegen::{CodeGenerator, Codegen},
     hash::{GenericHasher, ImperfectHasher},
     scatter::scatter,
     Phf,
@@ -8,8 +7,6 @@ use alloc::vec::Vec;
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::ops::Deref;
-use proc_macro2::TokenStream;
-use quote::quote;
 
 /// A constant-time perfect hash map.
 ///
@@ -170,17 +167,20 @@ where
     }
 }
 
-impl<K: Codegen, V: Codegen, H: ImperfectHasher<K>, C: Deref<Target = [Option<(K, V)>]>> Codegen
+#[cfg(feature = "codegen")]
+impl<K, V, H: ImperfectHasher<K>, C: Deref<Target = [Option<(K, V)>]>> super::codegen::Codegen
     for Map<K, V, H, C>
 where
-    Phf<K, H>: Codegen,
+    Phf<K, H>: super::codegen::Codegen,
+    K: super::codegen::Codegen,
+    V: super::codegen::Codegen,
 {
     #[inline]
-    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let static_map = gen.path("h::StaticMap");
         let phf = gen.piece(&self.phf);
         let data = gen.piece(&&*self.data);
         let len = gen.piece(&self.len);
-        quote!(#static_map::from_raw_parts(#phf, #data, #len))
+        quote::quote!(#static_map::from_raw_parts(#phf, #data, #len))
     }
 }

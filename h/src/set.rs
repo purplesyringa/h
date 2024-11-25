@@ -1,5 +1,4 @@
 use super::{
-    codegen::{CodeGenerator, Codegen},
     hash::{GenericHasher, ImperfectHasher},
     scatter::scatter,
     Phf,
@@ -8,8 +7,6 @@ use alloc::vec::Vec;
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::ops::Deref;
-use proc_macro2::TokenStream;
-use quote::quote;
 
 /// A constant-time perfect hash set.
 ///
@@ -140,16 +137,19 @@ where
     }
 }
 
-impl<T: Codegen, H: ImperfectHasher<T>, C: Deref<Target = [Option<T>]>> Codegen for Set<T, H, C>
+#[cfg(feature = "codegen")]
+impl<T, H: ImperfectHasher<T>, C: Deref<Target = [Option<T>]>> super::codegen::Codegen
+    for Set<T, H, C>
 where
-    Phf<T, H>: Codegen,
+    Phf<T, H>: super::codegen::Codegen,
+    T: super::codegen::Codegen,
 {
     #[inline]
-    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let static_set = gen.path("h::StaticSet");
         let phf = gen.piece(&self.phf);
         let data = gen.piece(&&*self.data);
         let len = gen.piece(&self.len);
-        quote!(#static_set::from_raw_parts(#phf, #data, #len))
+        quote::quote!(#static_set::from_raw_parts(#phf, #data, #len))
     }
 }

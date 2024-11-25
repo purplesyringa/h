@@ -11,15 +11,17 @@ edition = "2021"
 
 [dependencies]
 fastrand = { version = "2.2.0", default-features = false }
-proc-macro2 = "1.0.92"
-quote = "1.0.37"
+proc-macro2 = { version = "1", optional = true, default-features = false }
+quote = { version = "1", optional = true }
 radsort = "0.1.1"
-rapidhash = "1.1.0"
+rapidhash = { version = "1.1.0", default-features = false }
+rkyv = { version = "0.8.8", default-features = false }
 typeid = "1.0.2"
-
-[features]
-default = ["std"]
-std = []
 
 [dev-dependencies]
 zstd = "0.13.2"
+
+[features]
+default = ["std"]
+codegen = ["std", "dep:proc-macro2", "dep:quote"]
+std = []

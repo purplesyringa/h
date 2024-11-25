@@ -1,16 +1,22 @@
-//! Fast perfect hash tables.
+//! Practical, efficient perfect hash tables.
 //!
-//! This crates provides practical and efficient [perfect hash functions][phf] and hash tables built
-//! upon them. A PHF is a hash function without collisions on a certain subset of keys. Static hash
-//! tables built upon such hashes don't need to resolve collisions, speeding up access time at
-//! expense of build time.
+//! This crates provides fast [perfect hash functions][phf] and hash tables built upon them. A PHF
+//! is a hash function without collisions on a certain subset of keys. Static hash tables built upon
+//! such hashes don't need to resolve collisions, speeding up access time at expense of build time.
 //!
 //! [phf]: https://en.wikipedia.org/wiki/Perfect_hash_function
 //!
-//! `h` supports hash maps, hash sets, and hash functions (whose output you can interpret yourself).
-//! Static tables can be built in compile time with ergonomic macros. Hash tables can also be
-//! generated as codegen from `build.rs`. Finally, hash tables with "simple" keys and values can be
-//! dumped to files and then loaded in runtime, including from languages other than Rust.
+//! `h` provides collision-free hash maps, hash sets, and hash functions (whose output you can
+//! interpret yourself). It supports four use cases:
+//!
+//! - When the data is only available in runtime, use [`runtime::Map`]. It's slower to build than
+//!   [`HashMap`](std::collections::HashMap), but faster to access.
+//! - When the data is fixed, use [`static::map!`] to build the table in compile-time.
+//! - When the data is fixed, but programmatically generated, use [`codegen`] to generate Rust code
+//!   in `build.rs` and then `include!` it.
+//! - When the data is too large or needs to be replaceable without recompiling the code, use
+//!   [`rkyv::Map`] to build the table, save it to a file, and then load it in runtime or with
+//!   `include_bytes!` using [`rkyv::access`].
 //!
 //!
 //! # Usage
@@ -22,7 +28,7 @@
 //! h = "0.1"
 //! ```
 //!
-//! Add `no-default-features = true` for `#![no_std]` support.
+//! Add `default-features = false` for `#![no_std]` support.
 //!
 //! Create and use a static hashmap:
 //!
