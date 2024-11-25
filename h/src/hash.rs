@@ -14,7 +14,7 @@
 use alloc::vec::Vec;
 use core::fmt;
 use core::hash::Hasher;
-use fastrand::Rng;
+use rapidhash::RapidRng;
 
 /// An imperfect hash function, specialized for a particular type.
 ///
@@ -61,17 +61,16 @@ pub struct GenericHasher;
 /// for a given version of the crate.
 ///
 /// For integers up to 64 bits long and `bool`, the hash is computed as
-/// `(key as u64).wrapping_mul(seed)`, where `s`eed is stored in the low 64 bits of the instance.
-/// This means that the hash value is invariant under extending the length of the integer type up to
-/// 64 bits.
+/// `(key as u64).wrapping_mul(instance.0)`. This means that the hash value is invariant under
+/// extending the length of the integer type up to 64 bits.
 ///
-/// For 128-bit integers, `key_low.wrapping_mul(seed_low) ^ key_high.wrapping_mul(seed_high)` is
-/// computed, where `low` and `high` are the low and the high 64 bits of the key/instance.
+/// For 128-bit integers, `low.wrapping_mul(instance.0) ^ high.wrapping_mul(instance.1)` is
+/// computed, where `low` and `high` are the low and the high 64 bits of the key.
 ///
-/// For other types, rapidhash is applied to the output of [`PortableHash`]. The seed is stored in
-/// the low 64 bits of the instance.
+/// For other types, rapidhash is applied to the output of [`PortableHash`], with `instance.0` used
+/// as the seed.
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
-    type Instance = u128;
+    type Instance = (u64, u64);
 
     #[inline]
     fn hash(instance: &Self::Instance, key: &T) -> u64 {
@@ -81,15 +80,13 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
             reason = "intentional"
         )]
         if let Some(x) = reinterpret_scalar_up_to_64bit(key) {
-            x.wrapping_mul(*instance as u64)
+            x.wrapping_mul(instance.0)
         } else if let Some(&x) = unsafe { reinterpret_scalar::<_, u128>(key) } {
-            (x as u64).wrapping_mul(*instance as u64)
-                ^ ((x >> 64i32) as u64).wrapping_mul((*instance >> 64i32) as u64)
+            (x as u64).wrapping_mul(instance.0) ^ ((x >> 64i32) as u64).wrapping_mul(instance.1)
         } else if let Some(&x) = unsafe { reinterpret_scalar::<_, i128>(key) } {
-            (x as u64).wrapping_mul(*instance as u64)
-                ^ ((x >> 64i32) as u64).wrapping_mul((*instance >> 64i32) as u64)
+            (x as u64).wrapping_mul(instance.0) ^ ((x >> 64i32) as u64).wrapping_mul(instance.1)
         } else {
-            let mut state = rapidhash::RapidHasher::new(*instance as u64);
+            let mut state = rapidhash::RapidHasher::new(instance.0);
             key.hash(&mut state);
             state.finish()
         }
@@ -98,8 +95,8 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
     #[inline]
     fn iter() -> impl Iterator<Item = Self::Instance> {
         // Hexadecimal digits of pi - 3
-        let mut rng = Rng::with_seed(0x243f_6a88_85a3_08d3);
-        core::iter::repeat_with(move || rng.u128(..))
+        let mut rng = RapidRng::new(0x243f_6a88_85a3_08d3);
+        core::iter::repeat_with(move || (rng.next(), rng.next()))
     }
 }
 

@@ -14,16 +14,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "fastrand"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "486f806e73c5707928240ddc295403b1b93c96a02038563881c4a2fd84b81ac4"
-
-[[package]]
 name = "h"
 version = "0.1.0"
 dependencies = [
- "fastrand",
  "proc-macro2",
  "quote",
  "radsort",
