@@ -1,7 +1,8 @@
 use super::{
     codegen::{CodeGenerator, Codegen},
+    hash::{GenericHasher, ImperfectHasher},
     scatter::scatter,
-    GenericHasher, ImperfectHasher, Phf,
+    Phf,
 };
 use alloc::vec::Vec;
 use core::borrow::Borrow;

@@ -38,21 +38,9 @@
 //! ```
 //!
 //!
-//! # Imperfect hashes
-//!
-//! PHFs with a small output range, i.e. suitable for use as indices in hash tables, are built by
-//! refining imperfect hash functions -- still collision-free, but only with a full 64-bit output.
-//!
-//! Note that using [`core::hash::Hash`] for this is incorrect, as it's not portable between
-//! platforms. If that hash is used, generating a hash map with a macro and then using it in runtime
-//! may fail.
-//!
-//! Instead, this cache provides [`PortableHash`], which requires portability. You can implement
-//! this trait for your types and then use the default [`GenericHasher`] for hash tables.
-//! Alternatively, you can provide your own [`ImperfectHasher`] tuned to your data.
-//!
-//!
 //! # Advanced examples
+//!
+//! Programmatically code-gen a map in `build.rs`:
 //!
 //! ```rust
 //! let table: h::Map<u32, usize> = h::Map::from_entries(vec![
@@ -61,8 +49,7 @@
 //!     (3593220713, 789),
 //! ]);
 //!
-//! assert_eq!(table.get(&127361636), Some(&456));
-//! assert_eq!(table.get(&123), None);
+//! let code = h::codegen::CodeGenerator::new().generate(&table);
 //! ```
 
 #![no_std]
@@ -138,15 +125,14 @@ extern crate alloc;
 extern crate std;
 
 pub mod codegen;
+pub mod hash;
 mod hashed;
-mod hashfn;
 mod map;
 mod scatter;
 mod set;
 mod unhashed;
 
 pub use hashed::Phf;
-pub use hashfn::{GenericHasher, ImperfectHasher, PortableHash};
 pub use map::{Map, StaticMap};
 pub use set::{Set, StaticSet};
 

@@ -13,10 +13,7 @@
 //! let map: h::Map<i32, i32> = h::Map::from_entries(vec![(1, 2), (3, 4)]);
 //!
 //! // Convert to code
-//! let mut code = Vec::new();  // or anything else that implements io::Write
-//! let mut gen = h::codegen::CodeGenerator::new(&mut code)?;
-//! gen.write(&map)?;
-//! gen.finish()?;
+//! let code = h::codegen::CodeGenerator::new().generate(&map);
 //!
 //! // `code` can now be saved to an `.rs` file and then loaded with `include!`
 //! # Ok(())
@@ -158,8 +155,7 @@ pub trait Codegen {
     /// Emit a piece of code corresponding to this value.
     ///
     /// This method is only supposed to be called recursively from [`Codegen`] implementations. Call
-    /// the [`generate`] method on [`CodeGenerator`] to produce the complete code output for
-    /// a single value.
+    /// [`CodeGenerator::generate`] to produce the complete code output for a single value.
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream;
 }
 

@@ -1,7 +1,7 @@
 use super::{
     codegen::{CodeGenerator, Codegen},
+    hash::{GenericHasher, ImperfectHasher},
     unhashed::Phf as UnhashedPhf,
-    GenericHasher, ImperfectHasher,
 };
 use proc_macro2::TokenStream;
 use quote::quote;

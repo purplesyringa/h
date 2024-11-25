@@ -1,3 +1,16 @@
+//! Imperfect hashes.
+//!
+//! PHFs with a small output range, i.e. suitable for use as indices in hash tables, are built by
+//! refining imperfect hash functions -- still collision-free, but only with a full 64-bit output.
+//!
+//! Note that using [`core::hash::Hash`] for this is incorrect, as it's not portable between
+//! platforms. If that hash is used, generating a hash map with a macro and then using it in runtime
+//! may fail.
+//!
+//! Instead, this cache provides [`PortableHash`], which requires portability. You can implement
+//! this trait for your types and then use the default [`GenericHasher`] for hash tables.
+//! Alternatively, you can provide your own [`ImperfectHasher`] tuned to your data.
+
 use alloc::vec::Vec;
 use core::fmt;
 use core::hash::Hasher;
