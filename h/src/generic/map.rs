@@ -1,19 +1,8 @@
-use super::{
-    hash::{GenericHasher, ImperfectHasher},
-    scatter::scatter,
-    Phf,
-};
-use alloc::vec::Vec;
+use super::hashed::Phf;
+use crate::hash::{GenericHasher, ImperfectHasher};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::ops::Deref;
-
-/// A constant-time perfect hash map.
-///
-/// This type supports most read-only methods that [`std::collections::HashMap`] supports.
-///
-/// Construct with [`static_map!`].
-pub type StaticMap<K, V, H = GenericHasher> = Map<K, V, H, &'static [Option<(K, V)>]>;
 
 /// A perfect hash map.
 ///
@@ -23,73 +12,29 @@ pub type StaticMap<K, V, H = GenericHasher> = Map<K, V, H, &'static [Option<(K, 
 /// when the data is available in compile time, as this results in better performance.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher, C = Vec<Option<(K, V)>>> {
-    phf: Phf<K, H>,
+pub struct Map<K, V, C, D, H: ImperfectHasher<K> = GenericHasher> {
+    phf: Phf<K, D, H>,
     data: C,
     len: usize,
     marker: PhantomData<(K, V)>,
 }
 
-impl<K, V, H, C> Map<K, V, H, C>
+impl<K, V, C, D, H> Map<K, V, C, D, H>
 where
-    H: ImperfectHasher<K>,
     C: Deref<Target = [Option<(K, V)>]>,
+    D: Deref<Target = [u16]>,
+    H: ImperfectHasher<K>,
 {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(phf: Phf<K, H>, data: C, len: usize) -> Self {
+    pub const fn from_raw_parts(phf: Phf<K, D, H>, data: C, len: usize) -> Self {
         Self {
             phf,
             data,
             len,
             marker: PhantomData,
         }
-    }
-
-    /// Try to generate a perfect hash map.
-    ///
-    /// There must not be duplicate keys in the input.
-    ///
-    /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
-    /// in this case. For infinite hash families, this function either hangs or returns `Some`.
-    ///
-    /// To instantiate [`StaticMap`], use [`static_map!`].
-    #[inline] // heavy, but monomorphized anyway
-    #[must_use]
-    pub fn try_from_entries(entries: Vec<(K, V)>) -> Option<Self>
-    where
-        Vec<Option<(K, V)>>: Into<C>,
-    {
-        let len = entries.len();
-        let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
-        let mut data: Vec<Option<(K, V)>> = (0..phf.capacity()).map(|_| None).collect();
-        scatter(entries, |(key, _)| phf.hash(key), &mut data);
-        Some(Self {
-            phf,
-            data: data.into(),
-            len,
-            marker: PhantomData,
-        })
-    }
-
-    /// Generate a perfect hash map.
-    ///
-    /// There must not be duplicate keys in the input.
-    ///
-    /// To instantiate [`StaticMap`], use [`static_map!`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the underlying imperfect hash function family is finite and generation didn't
-    /// succeed.
-    #[inline]
-    #[must_use]
-    pub fn from_entries(entries: Vec<(K, V)>) -> Self
-    where
-        Vec<Option<(K, V)>>: Into<C>,
-    {
-        Self::try_from_entries(entries).expect("ran out of imperfect hash family instances")
     }
 
     /// Get a key-value pair by key.
@@ -167,16 +112,60 @@ where
     }
 }
 
+#[cfg(feature = "build")]
+impl<K, V, H: ImperfectHasher<K>>
+    Map<K, V, alloc::vec::Vec<Option<(K, V)>>, alloc::vec::Vec<u16>, H>
+{
+    /// Try to generate a perfect hash map.
+    ///
+    /// There must not be duplicate keys in the input.
+    ///
+    /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
+    /// in this case. For infinite hash families, this function either hangs or returns `Some`.
+    ///
+    /// To instantiate [`StaticMap`], use [`static_map!`].
+    #[inline] // heavy, but monomorphized anyway
+    #[must_use]
+    pub fn try_from_entries(entries: alloc::vec::Vec<(K, V)>) -> Option<Self> {
+        let len = entries.len();
+        let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
+        let mut data: alloc::vec::Vec<Option<(K, V)>> = (0..phf.capacity()).map(|_| None).collect();
+        super::scatter::scatter(entries, |(key, _)| phf.hash(key), &mut data);
+        Some(Self {
+            phf,
+            data: data.into(),
+            len,
+            marker: PhantomData,
+        })
+    }
+
+    /// Generate a perfect hash map.
+    ///
+    /// There must not be duplicate keys in the input.
+    ///
+    /// To instantiate [`StaticMap`], use [`static_map!`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying imperfect hash function family is finite and generation didn't
+    /// succeed.
+    #[inline]
+    #[must_use]
+    pub fn from_entries(entries: alloc::vec::Vec<(K, V)>) -> Self {
+        Self::try_from_entries(entries).expect("ran out of imperfect hash family instances")
+    }
+}
+
 #[cfg(feature = "codegen")]
-impl<K, V, H: ImperfectHasher<K>, C: Deref<Target = [Option<(K, V)>]>> super::codegen::Codegen
-    for Map<K, V, H, C>
+impl<K, V, C: Deref<Target = [Option<(K, V)>]>, H: ImperfectHasher<K>> crate::codegen::Codegen
+    for Map<K, V, C, H>
 where
-    Phf<K, H>: super::codegen::Codegen,
-    K: super::codegen::Codegen,
-    V: super::codegen::Codegen,
+    Phf<K, H>: crate::codegen::Codegen,
+    K: crate::codegen::Codegen,
+    V: crate::codegen::Codegen,
 {
     #[inline]
-    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
+    fn generate_piece(&self, gen: &mut crate::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let static_map = gen.path("h::StaticMap");
         let phf = gen.piece(&self.phf);
         let data = gen.piece(&&*self.data);

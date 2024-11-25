@@ -11,7 +11,6 @@
 //! this trait for your types and then use the default [`GenericHasher`] for hash tables.
 //! Alternatively, you can provide your own [`ImperfectHasher`] tuned to your data.
 
-use alloc::vec::Vec;
 use core::fmt;
 use core::hash::Hasher;
 use rapidhash::RapidRng;
@@ -179,21 +178,22 @@ impl PortableHash for isize {
 }
 
 macro_rules! impl_str {
-    ($($ty:ty),*) => {
-        $(
-            impl PortableHash for $ty {
-                #[inline]
-                fn hash<H: Hasher>(&self, state: &mut H) {
-                    state.write(self.as_bytes());
-                    state.write(&[0xff]);
-                }
+    ($ty:ty) => {
+        impl PortableHash for $ty {
+            #[inline]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                state.write(self.as_bytes());
+                state.write(&[0xff]);
             }
-        )*
+        }
     };
 }
-impl_str!(str, alloc::string::String);
+impl_str!(str);
+#[cfg(feature = "alloc")]
+impl_str!(alloc::string::String);
 
-impl<T: PortableHash> PortableHash for Vec<T> {
+#[cfg(feature = "alloc")]
+impl<T: PortableHash> PortableHash for alloc::vec::Vec<T> {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         <[T] as PortableHash>::hash(self, state);

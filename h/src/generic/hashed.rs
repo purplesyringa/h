@@ -1,7 +1,6 @@
-use super::{
-    hash::{GenericHasher, ImperfectHasher},
-    unhashed::Phf as UnhashedPhf,
-};
+use super::unhashed::Phf as UnhashedPhf;
+use crate::hash::{GenericHasher, ImperfectHasher};
+use core::ops::Deref;
 
 /// A perfect hash function.
 ///
@@ -12,22 +11,50 @@ use super::{
 /// available in compile time, as this results in better performance.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Phf<T, H: ImperfectHasher<T> = GenericHasher> {
+pub struct Phf<T, D, H: ImperfectHasher<T> = GenericHasher> {
     hash_instance: H::Instance,
-    unhashed_phf: UnhashedPhf,
+    unhashed_phf: UnhashedPhf<D>,
 }
 
-impl<T, H: ImperfectHasher<T>> Phf<T, H> {
+impl<T, D: Deref<Target = [u16]>, H: ImperfectHasher<T>> Phf<T, D, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(hash_instance: H::Instance, unhashed_phf: UnhashedPhf) -> Self {
+    pub const fn from_raw_parts(hash_instance: H::Instance, unhashed_phf: UnhashedPhf<D>) -> Self {
         Self {
             hash_instance,
             unhashed_phf,
         }
     }
 
+    /// Hash a key.
+    ///
+    /// The whole point. Guaranteed to return different indices for different keys from the training
+    /// dataset. `key` is expected to already be hashed.
+    ///
+    /// May return arbitrary indices for keys outside the dataset.
+    #[inline]
+    pub fn hash<U: ?Sized>(&self, key: &U) -> usize
+    where
+        H: ImperfectHasher<U, Instance = <H as ImperfectHasher<T>>::Instance>,
+    {
+        self.unhashed_phf.hash(H::hash(&self.hash_instance, key))
+    }
+
+    /// Get the boundary on indices.
+    ///
+    /// This is `N` such that all keys are within range `[0; N)`.
+    ///
+    /// The index returned by `hash` is guaranteed to *always* be less than `capacity()`, even for
+    /// keys outside the training dataset.
+    #[inline]
+    pub const fn capacity(&self) -> usize {
+        self.unhashed_phf.capacity()
+    }
+}
+
+#[cfg(feature = "build")]
+impl<T, H: ImperfectHasher<T>> Phf<T, alloc::vec::Vec<u16>, H> {
     /// Try to generate a perfect hash function.
     ///
     /// `keys` must not contain duplicates. It's an exact-size cloneable iterator rather than
@@ -102,31 +129,6 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         T: 'a,
     {
         Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
-    }
-
-    /// Hash a key.
-    ///
-    /// The whole point. Guaranteed to return different indices for different keys from the training
-    /// dataset. `key` is expected to already be hashed.
-    ///
-    /// May return arbitrary indices for keys outside the dataset.
-    #[inline]
-    pub fn hash<U: ?Sized>(&self, key: &U) -> usize
-    where
-        H: ImperfectHasher<U, Instance = <H as ImperfectHasher<T>>::Instance>,
-    {
-        self.unhashed_phf.hash(H::hash(&self.hash_instance, key))
-    }
-
-    /// Get the boundary on indices.
-    ///
-    /// This is `N` such that all keys are within range `[0; N)`.
-    ///
-    /// The index returned by `hash` is guaranteed to *always* be less than `capacity()`, even for
-    /// keys outside the training dataset.
-    #[inline]
-    pub const fn capacity(&self) -> usize {
-        self.unhashed_phf.capacity()
     }
 }
 

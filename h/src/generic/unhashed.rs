@@ -1,6 +1,8 @@
 #![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
 
-use alloc::borrow::Cow;
+use core::ops::Deref;
+
+#[cfg(all(feature = "alloc", feature = "build"))]
 use alloc::{vec, vec::Vec};
 
 // We assume that usize is at most 64-bit in many places.
@@ -14,7 +16,7 @@ const _: () = assert!(
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Phf {
+pub struct Phf<D> {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     hash_space: usize,
 
@@ -25,13 +27,13 @@ pub struct Phf {
     bucket_shift: u32,
 
     /// Per-bucket displacement values
-    displacements: Cow<'static, [u16]>,
+    displacements: D,
 
     /// How the displacement is mixed into the approximate position
     mixer: Mixer,
 }
 
-impl Phf {
+impl<D: Deref<Target = [u16]>> Phf<D> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -39,7 +41,7 @@ impl Phf {
         hash_space: usize,
         hash_space_with_oob: usize,
         bucket_shift: u32,
-        displacements: Cow<'static, [u16]>,
+        displacements: D,
         mixer: Mixer,
     ) -> Self {
         Self {
@@ -49,36 +51,6 @@ impl Phf {
             displacements,
             mixer,
         }
-    }
-
-    /// Generate a perfect hash function.
-    ///
-    /// `hash_space` must be at least somewhat higher than `keys.len()`. `keys` are expected to
-    /// already be hashed; may easily fail for bad hashes or just if it feels like it. Try to retry
-    /// with other parameters in this case.
-    ///
-    /// If there are duplicates in `keys`, returns `None`.
-    #[allow(
-        clippy::missing_inline_in_public_items,
-        reason = "very heavy, we'd rather not copy it to every crate"
-    )]
-    #[must_use]
-    pub fn try_from_keys(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
-        if keys.is_empty() {
-            return Some(Self {
-                hash_space: 0,
-                hash_space_with_oob: 1,
-                bucket_shift: 31,
-                displacements: Cow::Borrowed(&[0, 0]),
-                mixer: Mixer::Add,
-            });
-        }
-
-        let buckets = Buckets::try_from_keys(keys, hash_space)?;
-        // Add is faster to generate when successful -- try it first
-        buckets
-            .try_generate_phf(Mixer::Add)
-            .or_else(|| buckets.try_generate_phf(Mixer::Xor))
     }
 
     /// Hash a key.
@@ -113,7 +85,41 @@ impl Phf {
     }
 }
 
+#[cfg(feature = "build")]
+impl Phf<Vec<u16>> {
+    /// Generate a perfect hash function.
+    ///
+    /// `hash_space` must be at least somewhat higher than `keys.len()`. `keys` are expected to
+    /// already be hashed; may easily fail for bad hashes or just if it feels like it. Try to retry
+    /// with other parameters in this case.
+    ///
+    /// If there are duplicates in `keys`, returns `None`.
+    #[allow(
+        clippy::missing_inline_in_public_items,
+        reason = "very heavy, we'd rather not copy it to every crate"
+    )]
+    #[must_use]
+    pub fn try_from_keys(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
+        if keys.is_empty() {
+            return Some(Self {
+                hash_space: 0,
+                hash_space_with_oob: 1,
+                bucket_shift: 31,
+                displacements: vec![0, 0],
+                mixer: Mixer::Add,
+            });
+        }
+
+        let buckets = Buckets::try_from_keys(keys, hash_space)?;
+        // Add is faster to generate when successful -- try it first
+        buckets
+            .try_generate_phf(Mixer::Add)
+            .or_else(|| buckets.try_generate_phf(Mixer::Xor))
+    }
+}
+
 /// Keys, split into buckets.
+#[cfg(feature = "build")]
 struct Buckets {
     /// Approx values of keys, ordered such that all buckets are consecutive
     approxs: Vec<u64>,
@@ -128,6 +134,7 @@ struct Buckets {
     bucket_shift: u32,
 }
 
+#[cfg(feature = "build")]
 impl Buckets {
     /// Expected bucket size. We follow CHD here.
     const LAMBDA: usize = 5;
@@ -246,7 +253,7 @@ impl Buckets {
     /// Attempt to generate a PHF with the given mixer. May fail.
     ///
     /// Hash space must be at least somewhat larger than the number of keys.
-    fn try_generate_phf(&self, mixer: Mixer) -> Option<Phf> {
+    fn try_generate_phf(&self, mixer: Mixer) -> Option<Phf<Vec<u16>>> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
         let alloc = self.hash_space + u16::MAX as usize;
         let mut free = vec![u8::MAX; alloc.div_ceil(8)];
@@ -280,7 +287,7 @@ impl Buckets {
             hash_space: self.hash_space,
             hash_space_with_oob,
             bucket_shift: self.bucket_shift,
-            displacements: Cow::Owned(displacements),
+            displacements,
             mixer,
         })
     }
@@ -319,6 +326,7 @@ impl Mixer {
     /// # Safety
     ///
     /// `free` as a bitmap must be large enough to fit `approx + 65535`.
+    #[cfg(feature = "build")]
     unsafe fn find_valid_displacement(
         self,
         approx_for_bucket: &[u64],
@@ -344,6 +352,7 @@ impl Mixer {
     /// # Safety
     ///
     /// `free` as a bitmap must be large enough to fit `approx + 65535`.
+    #[cfg(feature = "build")]
     unsafe fn find_valid_displacement_add(
         approx_for_bucket: &[u64],
         free: *const u8,
@@ -389,6 +398,7 @@ impl Mixer {
     /// # Safety
     ///
     /// `free` as a bitmap must be large enough to fit `approx + 65535`.
+    #[cfg(feature = "build")]
     unsafe fn find_valid_displacement_xor(
         approx_for_bucket: &[u64],
         free: *const u8,
@@ -423,6 +433,7 @@ impl Mixer {
         None
     }
 
+    #[cfg(feature = "build")]
     fn get_hash_space_with_oob(self, hash_space: usize, displacements: &[u16]) -> usize {
         let max_displacement = *displacements.iter().max().unwrap_or(&0) as usize;
         match self {
@@ -438,6 +449,7 @@ impl Mixer {
     }
 }
 
+#[cfg(feature = "build")]
 const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
     let mut lut = [[0; 256]; 8];
     let mut xor = 0;
@@ -466,7 +478,7 @@ impl super::codegen::Codegen for Phf {
         let hash_space = gen.piece(&self.hash_space);
         let hash_space_with_oob = gen.piece(&self.hash_space_with_oob);
         let bucket_shift = gen.piece(&self.bucket_shift);
-        let displacements = gen.piece(&self.displacements);
+        let displacements = gen.piece(&*self.displacements);
         let mixer = gen.piece(&self.mixer);
         quote::quote!(
             #unhashed_phf::from_raw_parts(

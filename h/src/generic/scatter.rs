@@ -1,3 +1,5 @@
+#![cfg(feature = "build")]
+
 use alloc::vec::Vec;
 
 /// Move elements from `x = source[i]` to `destination[permutation(x)]`.

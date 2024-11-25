@@ -11,7 +11,7 @@
 //!
 //! - When the data is only available in runtime, use [`runtime::Map`]. It's slower to build than
 //!   [`HashMap`](std::collections::HashMap), but faster to access.
-//! - When the data is fixed, use [`static::map!`] to build the table in compile-time.
+//! - When the data is fixed, use [`constant::map!`] to build the table in compile-time.
 //! - When the data is fixed, but programmatically generated, use [`codegen`] to generate Rust code
 //!   in `build.rs` and then `include!` it.
 //! - When the data is too large or needs to be replaceable without recompiling the code, use
@@ -125,28 +125,25 @@
     reason = "I'm not an idiot, this is a result of benchmarking/profiling"
 )]
 
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
 #[cfg(feature = "std")]
 extern crate std;
 
 pub mod codegen;
+pub mod constant;
+pub mod generic;
 pub mod hash;
-mod hashed;
-mod map;
-mod scatter;
-mod set;
-mod unhashed;
+pub mod runtime;
 
-pub use hashed::Phf;
-pub use map::{Map, StaticMap};
-pub use set::{Set, StaticSet};
+// pub use hashed::Phf;
+// pub use map::{Map, StaticMap};
+// pub use set::{Set, StaticSet};
 
 #[doc(hidden)]
 pub mod low_level {
-    pub use super::unhashed::{Mixer, Phf as UnhashedPhf};
-    // Reexport because `alloc` is not available without `extern crate alloc`
-    pub use alloc::borrow::Cow;
+    pub use super::generic::unhashed::{Mixer, Phf as UnhashedPhf};
 }
 
 #[cfg(test)]
