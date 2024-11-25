@@ -2,7 +2,7 @@
 
 use core::ops::Deref;
 
-#[cfg(all(feature = "alloc", feature = "build"))]
+#[cfg(feature = "build")]
 use alloc::{vec, vec::Vec};
 
 // We assume that usize is at most 64-bit in many places.
