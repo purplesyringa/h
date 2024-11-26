@@ -5,13 +5,19 @@
 //! This module is useful for generating tables programmatically in `build.rs`.
 //!
 //! Scalars, tuples, strings, and hash tables can be codegen-ed. For custom types, you'll need to
-//! implement the [`Codegen`] trait manually.
+//! implement the [`Codegen`] trait manually. Note that values can be serialized and deserialized on
+//! different platforms (in case of cross-compilation) and with different crate features. Your
+//! codegen logic might need to take this into consideration.
 //!
-//! **Warning**. Runtime-constructed hash tables own the values and store them in a [`Vec`].
-//! [`Codegen`] doesn't try to guess your intentions, so the generated code will create a vector,
-//! even in a `const` context. To prevent this, call `.borrow()` on the hash table beforehand, so
-//! that a reference to a `static` is generated instead. This is not the default behavior, as
-//! runtime initialization is necessary if the value cannot be constructed in `const`.
+//! <div class="warning">
+//!
+//! Runtime-constructed hash tables own the values and store them in a [`Vec`]. [`Codegen`] doesn't
+//! try to guess your intentions, so the generated code will create a vector, even in a `const`
+//! context. To prevent this, call `.borrow()` on the hash table beforehand, so that a reference to
+//! a `static` is generated instead. This is not the default behavior, as runtime initialization is
+//! necessary if the value cannot be constructed in `const`.
+//!
+//! </div>
 //!
 //!
 //! # Example
