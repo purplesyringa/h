@@ -10,23 +10,34 @@
 //!
 //! # Usage
 //!
-//! `h` implements a hash [`Map`], a hash [`Set`], and a low-level [`Phf`].
+//! `h` implements a [`Map`], a [`Set`], and a low-level [`Phf`]. These types can be initialized in
+//! several ways:
 //!
-//! These types can be initialized in several ways:
-//!
-//! 1. They can be built in runtime by calling `from_*` methods. This is slow, so consider
-//!    [`HashMap`](std::collections::HashMap) instead.
+//! 1. They can be built in runtime by calling `from_*` methods. (This is slow, so profile against
+//!    [`HashMap`](std::collections::HashMap).)
 //! 2. They can be built in compile time with macros, such as [`map!`]. Zero-cost in runtime.
 //! 3. They can be built in `build.rs` with `from_*`, translated to code with [`codegen`] and then
-//!    `include!`d. Zero-cost in runtime and supports programmatic generation.
-//! 4. They can be built, saved to a file, and then loaded back with [`rkyv`]. Zero-cost when
-//!    loading. Also consider using this instead of codegen for large data.
+//!    `include!`d. Zero-cost in runtime and supports programmatic generation, even for
+//!    non-serializable types.
+//! 4. They can be built, saved to a file, and then loaded back with [rkyv](https://rkyv.org/).
+//!    Zero-cost when loading. Also consider using this instead of codegen for large data.
 //!
 //! The types can either own the data (when constructed in runtime) or borrow it (when constructed
-//! in compile time or deserialized with [`rkyv`]). Lifetime parameters specify the duration of that
-//! borrow, if it's present; in most cases, it's just `'static`.
+//! in compile time or deserialized with [rkyv](https://rkyv.org/)). Lifetime parameters specify the
+//! duration of that borrow, if it's present; in many cases, it can just be `'static`.
+//!
+//!
+//! # Features
+//!
+//! - `std` (default): Whether `std` is available. Isn't currently used for much except tests.
+//! - `alloc` (default): Whether `alloc` is available. Enables implementations of certain traits for
+//!   types from `alloc`, such as `String`.
+//! - `build`: Enables `from_*` methods. Necessary for runtime building or programmatic generation
+//!   in `build.rs`.
+//! - `codegen`: Enables [`codegen`]. Necessary for programmatic generation in `build.rs`.
 
 #![no_std]
+#![cfg_attr(doc, feature(doc_auto_cfg))]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(
     missing_docs,
