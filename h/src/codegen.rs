@@ -254,14 +254,14 @@ impl<T: ?Sized + ToOwned<Owned: Codegen> + Codegen> Codegen for Cow<'_, T> {
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
         match self {
             Cow::Borrowed(b) => {
-                let borrowed = gen.path("h::low_level::Cow::Borrowed");
+                let borrowed = gen.path("alloc::borrow::Cow::Borrowed");
                 let target = gen.piece(b);
-                quote!(#borrowed(&#target))
+                quote!(#borrowed(#target))
             }
             Cow::Owned(o) => {
-                let owned = gen.path("h::low_level::Cow::Owned");
+                let owned = gen.path("alloc::borrow::Cow::Owned");
                 let target = gen.piece(o);
-                quote!(#owned(&#target))
+                quote!(#owned(#target))
             }
         }
     }
