@@ -132,7 +132,7 @@ impl<'phf, T, H: ImperfectHasher<T>> Phf<'phf, T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Phf<T, H>
+impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Phf<'_, T, H>
 where
     H::Instance: super::codegen::Codegen,
 {

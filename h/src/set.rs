@@ -106,15 +106,15 @@ impl<'phf, 'data, T: 'data, H: ImperfectHasher<T>> Set<'phf, 'data, T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<T, C: Deref<Target = [Option<T>]>, H: ImperfectHasher<T>> super::codegen::Codegen
-    for Set<T, C, H>
+impl<'phf, 'data, T: 'data, H: ImperfectHasher<T>> super::codegen::Codegen
+    for Set<'phf, 'data, T, H>
 where
-    Phf<T, H>: super::codegen::Codegen,
+    Phf<'phf, T, H>: super::codegen::Codegen,
     T: super::codegen::Codegen,
 {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
-        let static_set = gen.path("h::StaticSet");
+        let static_set = gen.path("h::Set");
         let phf = gen.piece(&self.phf);
         let data = gen.piece(&&*self.data);
         let len = gen.piece(&self.len);

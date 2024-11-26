@@ -22,8 +22,8 @@
 //! 4. They can be built, saved to a file, and then loaded back with [`rkyv`]. Zero-cost when
 //!    loading. Also consider using this instead of codegen for large data.
 //!
-//! The types can either own the data (when constructed manually) or borrow it (when constructed
-//! with macros or deserialized with [`rkyv`]). Lifetime parameters specify the duration of that
+//! The types can either own the data (when constructed in runtime) or borrow it (when constructed
+//! in compile time or deserialized with [`rkyv`]). Lifetime parameters specify the duration of that
 //! borrow; use `'static` if the data is owned.
 
 #![no_std]

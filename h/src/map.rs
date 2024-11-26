@@ -136,16 +136,16 @@ impl<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K>> Map<'phf, 'data, K,
 }
 
 #[cfg(feature = "codegen")]
-impl<K, V, C: Deref<Target = [Option<(K, V)>]>, H: ImperfectHasher<K>> crate::codegen::Codegen
-    for Map<K, V, C, H>
+impl<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K>> crate::codegen::Codegen
+    for Map<'phf, 'data, K, V, H>
 where
-    Phf<K, H>: crate::codegen::Codegen,
+    Phf<'phf, K, H>: crate::codegen::Codegen,
     K: crate::codegen::Codegen,
     V: crate::codegen::Codegen,
 {
     #[inline]
     fn generate_piece(&self, gen: &mut crate::codegen::CodeGenerator) -> proc_macro2::TokenStream {
-        let static_map = gen.path("h::StaticMap");
+        let static_map = gen.path("h::Map");
         let phf = gen.piece(&self.phf);
         let data = gen.piece(&&*self.data);
         let len = gen.piece(&self.len);

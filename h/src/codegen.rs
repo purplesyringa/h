@@ -249,13 +249,21 @@ fn as_byte_slice<T: ?Sized>(object: &T) -> Option<&[u8]> {
     }
 }
 
-/// Always converts to a borrowed version, making the generated code usable in a `const` context.
-impl<T: ?Sized + ToOwned + Codegen> Codegen for Cow<'_, T> {
+impl<T: ?Sized + ToOwned<Owned: Codegen> + Codegen> Codegen for Cow<'_, T> {
     #[inline]
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
-        let borrowed = gen.path("h::low_level::Cow::Borrowed");
-        let target = gen.piece(self.as_ref());
-        quote!(#borrowed(&#target))
+        match self {
+            Cow::Borrowed(b) => {
+                let borrowed = gen.path("h::low_level::Cow::Borrowed");
+                let target = gen.piece(b);
+                quote!(#borrowed(&#target))
+            }
+            Cow::Owned(o) => {
+                let owned = gen.path("h::low_level::Cow::Owned");
+                let target = gen.piece(o);
+                quote!(#owned(&#target))
+            }
+        }
     }
 }
 

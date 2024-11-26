@@ -41,14 +41,14 @@ impl<'phf> Phf<'phf> {
         hash_space: usize,
         hash_space_with_oob: usize,
         bucket_shift: u32,
-        displacements: BorrowedOrOwnedSlice<'phf, u16>,
+        displacements: &'phf [u16],
         mixer: Mixer,
     ) -> Self {
         Self {
             hash_space,
             hash_space_with_oob,
             bucket_shift,
-            displacements,
+            displacements: BorrowedOrOwnedSlice::Borrowed(displacements),
             mixer,
         }
     }
@@ -469,7 +469,7 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
 };
 
 #[cfg(feature = "codegen")]
-impl super::codegen::Codegen for Phf {
+impl super::codegen::Codegen for Phf<'_> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let unhashed_phf = gen.path("h::low_level::UnhashedPhf");
