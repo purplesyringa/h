@@ -8,12 +8,12 @@ use super::{
 /// A mapping from `T` to numbers from `0` to `N - 1`, injective over the training key set. `N`
 /// might be larger than the size of the training key set.
 #[non_exhaustive]
-pub struct Phf<'a, T: 'a, H: ImperfectHasher<T> = GenericHasher> {
+pub struct Phf<'a, T, H: ImperfectHasher<T> = GenericHasher> {
     hash_instance: H::Instance,
     unhashed_phf: UnhashedPhf<'a>,
 }
 
-impl<'a, T: 'a, H: ImperfectHasher<T>> Phf<'a, T, H> {
+impl<'a, T, H: ImperfectHasher<T>> Phf<'a, T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]

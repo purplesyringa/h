@@ -6,13 +6,13 @@ use core::borrow::Borrow;
 
 /// A perfect hash map.
 #[non_exhaustive]
-pub struct Map<'a, K: 'a, V: 'a, H: ImperfectHasher<K> = GenericHasher> {
+pub struct Map<'a, K, V, H: ImperfectHasher<K> = GenericHasher> {
     phf: Phf<'a, K, H>,
     data: BorrowedOrOwnedSlice<'a, Option<(K, V)>>,
     len: usize,
 }
 
-impl<'a, K: 'a, V: 'a, H: ImperfectHasher<K>> Map<'a, K, V, H> {
+impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -136,7 +136,7 @@ impl<'a, K: 'a, V: 'a, H: ImperfectHasher<K>> Map<'a, K, V, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<'a, K: 'a, V: 'a, H: ImperfectHasher<K>> crate::codegen::Codegen for Map<'a, K, V, H>
+impl<'a, K, V, H: ImperfectHasher<K>> crate::codegen::Codegen for Map<'a, K, V, H>
 where
     Phf<'a, K, H>: crate::codegen::Codegen,
     K: crate::codegen::Codegen,

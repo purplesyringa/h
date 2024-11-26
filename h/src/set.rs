@@ -6,13 +6,13 @@ use core::borrow::Borrow;
 
 /// A perfect hash set.
 #[non_exhaustive]
-pub struct Set<'a, T: 'a, H: ImperfectHasher<T> = GenericHasher> {
+pub struct Set<'a, T, H: ImperfectHasher<T> = GenericHasher> {
     phf: Phf<'a, T, H>,
     data: BorrowedOrOwnedSlice<'a, Option<T>>,
     len: usize,
 }
 
-impl<'a, T: 'a, H: ImperfectHasher<T>> Set<'a, T, H> {
+impl<'a, T, H: ImperfectHasher<T>> Set<'a, T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -106,7 +106,7 @@ impl<'a, T: 'a, H: ImperfectHasher<T>> Set<'a, T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<'a, T: 'a, H: ImperfectHasher<T>> super::codegen::Codegen for Set<'a, T, H>
+impl<'a, T, H: ImperfectHasher<T>> super::codegen::Codegen for Set<'a, T, H>
 where
     Phf<'a, T, H>: super::codegen::Codegen,
     T: super::codegen::Codegen,
