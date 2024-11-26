@@ -6,19 +6,19 @@ use core::borrow::Borrow;
 
 /// A perfect hash map.
 #[non_exhaustive]
-pub struct Map<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K> = GenericHasher> {
-    phf: Phf<'phf, K, H>,
-    data: BorrowedOrOwnedSlice<'data, Option<(K, V)>>,
+pub struct Map<'a, K: 'a, V: 'a, H: ImperfectHasher<K> = GenericHasher> {
+    phf: Phf<'a, K, H>,
+    data: BorrowedOrOwnedSlice<'a, Option<(K, V)>>,
     len: usize,
 }
 
-impl<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K>> Map<'phf, 'data, K, V, H> {
+impl<'a, K: 'a, V: 'a, H: ImperfectHasher<K>> Map<'a, K, V, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
     pub const fn from_raw_parts(
-        phf: Phf<'phf, K, H>,
-        data: BorrowedOrOwnedSlice<'data, Option<(K, V)>>,
+        phf: Phf<'a, K, H>,
+        data: BorrowedOrOwnedSlice<'a, Option<(K, V)>>,
         len: usize,
     ) -> Self {
         Self { phf, data, len }
@@ -136,10 +136,9 @@ impl<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K>> Map<'phf, 'data, K,
 }
 
 #[cfg(feature = "codegen")]
-impl<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K>> crate::codegen::Codegen
-    for Map<'phf, 'data, K, V, H>
+impl<'a, K: 'a, V: 'a, H: ImperfectHasher<K>> crate::codegen::Codegen for Map<'a, K, V, H>
 where
-    Phf<'phf, K, H>: crate::codegen::Codegen,
+    Phf<'a, K, H>: crate::codegen::Codegen,
     K: crate::codegen::Codegen,
     V: crate::codegen::Codegen,
 {

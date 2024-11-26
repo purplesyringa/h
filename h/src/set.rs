@@ -6,19 +6,19 @@ use core::borrow::Borrow;
 
 /// A perfect hash set.
 #[non_exhaustive]
-pub struct Set<'phf, 'data, T: 'data, H: ImperfectHasher<T> = GenericHasher> {
-    phf: Phf<'phf, T, H>,
-    data: BorrowedOrOwnedSlice<'data, Option<T>>,
+pub struct Set<'a, T: 'a, H: ImperfectHasher<T> = GenericHasher> {
+    phf: Phf<'a, T, H>,
+    data: BorrowedOrOwnedSlice<'a, Option<T>>,
     len: usize,
 }
 
-impl<'phf, 'data, T: 'data, H: ImperfectHasher<T>> Set<'phf, 'data, T, H> {
+impl<'a, T: 'a, H: ImperfectHasher<T>> Set<'a, T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
     pub const fn from_raw_parts(
-        phf: Phf<'phf, T, H>,
-        data: BorrowedOrOwnedSlice<'data, Option<T>>,
+        phf: Phf<'a, T, H>,
+        data: BorrowedOrOwnedSlice<'a, Option<T>>,
         len: usize,
     ) -> Self {
         Self { phf, data, len }
@@ -106,10 +106,9 @@ impl<'phf, 'data, T: 'data, H: ImperfectHasher<T>> Set<'phf, 'data, T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<'phf, 'data, T: 'data, H: ImperfectHasher<T>> super::codegen::Codegen
-    for Set<'phf, 'data, T, H>
+impl<'a, T: 'a, H: ImperfectHasher<T>> super::codegen::Codegen for Set<'a, T, H>
 where
-    Phf<'phf, T, H>: super::codegen::Codegen,
+    Phf<'a, T, H>: super::codegen::Codegen,
     T: super::codegen::Codegen,
 {
     #[inline]

@@ -8,19 +8,16 @@ use super::{
 /// A mapping from `T` to numbers from `0` to `N - 1`, injective over the training key set. `N`
 /// might be larger than the size of the training key set.
 #[non_exhaustive]
-pub struct Phf<'phf, T, H: ImperfectHasher<T> = GenericHasher> {
+pub struct Phf<'a, T: 'a, H: ImperfectHasher<T> = GenericHasher> {
     hash_instance: H::Instance,
-    unhashed_phf: UnhashedPhf<'phf>,
+    unhashed_phf: UnhashedPhf<'a>,
 }
 
-impl<'phf, T, H: ImperfectHasher<T>> Phf<'phf, T, H> {
+impl<'a, T: 'a, H: ImperfectHasher<T>> Phf<'a, T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(
-        hash_instance: H::Instance,
-        unhashed_phf: UnhashedPhf<'phf>,
-    ) -> Self {
+    pub const fn from_raw_parts(hash_instance: H::Instance, unhashed_phf: UnhashedPhf<'a>) -> Self {
         Self {
             hash_instance,
             unhashed_phf,
@@ -45,9 +42,9 @@ impl<'phf, T, H: ImperfectHasher<T>> Phf<'phf, T, H> {
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
     #[allow(clippy::arithmetic_side_effects, reason = "asserted")]
-    pub fn try_from_keys<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Option<Self>
+    pub fn try_from_keys<'b>(keys: impl ExactSizeIterator<Item = &'b T> + Clone) -> Option<Self>
     where
-        T: 'a,
+        T: 'b,
     {
         // Asserting this is enough to guarantee that `hash_space` never overflows.
         assert!(keys.len() <= isize::MAX as usize / 2, "Too many keys");
@@ -98,9 +95,9 @@ impl<'phf, T, H: ImperfectHasher<T>> Phf<'phf, T, H> {
         clippy::needless_pass_by_value,
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
-    pub fn from_keys<'a>(keys: impl ExactSizeIterator<Item = &'a T> + Clone) -> Self
+    pub fn from_keys<'b>(keys: impl ExactSizeIterator<Item = &'b T> + Clone) -> Self
     where
-        T: 'a,
+        T: 'b,
     {
         Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
     }

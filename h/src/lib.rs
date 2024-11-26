@@ -24,7 +24,7 @@
 //!
 //! The types can either own the data (when constructed in runtime) or borrow it (when constructed
 //! in compile time or deserialized with [`rkyv`]). Lifetime parameters specify the duration of that
-//! borrow; use `'static` if the data is owned.
+//! borrow, if it's present; in most cases, it's just `'static`.
 
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]

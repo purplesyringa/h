@@ -16,7 +16,7 @@ const _: () = assert!(
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Phf<'phf> {
+pub struct Phf<'a> {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     hash_space: usize,
 
@@ -27,13 +27,13 @@ pub struct Phf<'phf> {
     bucket_shift: u32,
 
     /// Per-bucket displacement values
-    displacements: BorrowedOrOwnedSlice<'phf, u16>,
+    displacements: BorrowedOrOwnedSlice<'a, u16>,
 
     /// How the displacement is mixed into the approximate position
     mixer: Mixer,
 }
 
-impl<'phf> Phf<'phf> {
+impl<'a> Phf<'a> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -41,7 +41,7 @@ impl<'phf> Phf<'phf> {
         hash_space: usize,
         hash_space_with_oob: usize,
         bucket_shift: u32,
-        displacements: &'phf [u16],
+        displacements: &'a [u16],
         mixer: Mixer,
     ) -> Self {
         Self {
@@ -251,7 +251,7 @@ impl Buckets {
     /// Attempt to generate a PHF with the given mixer. May fail.
     ///
     /// Hash space must be at least somewhat larger than the number of keys.
-    fn try_generate_phf<'phf>(&self, mixer: Mixer) -> Option<Phf<'phf>> {
+    fn try_generate_phf<'a>(&self, mixer: Mixer) -> Option<Phf<'a>> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
         let alloc = self.hash_space + u16::MAX as usize;
         let mut free = vec![u8::MAX; alloc.div_ceil(8)];
