@@ -1,40 +1,63 @@
-use super::hashed::Phf;
-use crate::hash::{GenericHasher, ImperfectHasher};
+use super::{
+    hash::{GenericHasher, ImperfectHasher},
+    BorrowedOrOwnedSlice, Phf,
+};
 use core::borrow::Borrow;
-use core::marker::PhantomData;
-use core::ops::Deref;
 
 /// A perfect hash map.
-///
-/// This type supports most read-only methods that [`std::collections::HashMap`] supports.
-///
-/// By default, [`Map`] can be both built and used in runtime. Use [`StaticMap`] and [`static_map!`]
-/// when the data is available in compile time, as this results in better performance.
-#[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Map<K, V, C, D, H: ImperfectHasher<K> = GenericHasher> {
-    phf: Phf<K, D, H>,
-    data: C,
+pub struct Map<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K> = GenericHasher> {
+    phf: Phf<'phf, K, H>,
+    data: BorrowedOrOwnedSlice<'data, Option<(K, V)>>,
     len: usize,
-    marker: PhantomData<(K, V)>,
 }
 
-impl<K, V, C, D, H> Map<K, V, C, D, H>
-where
-    C: Deref<Target = [Option<(K, V)>]>,
-    D: Deref<Target = [u16]>,
-    H: ImperfectHasher<K>,
-{
+impl<'phf, 'data, K: 'data, V: 'data, H: ImperfectHasher<K>> Map<'phf, 'data, K, V, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(phf: Phf<K, D, H>, data: C, len: usize) -> Self {
-        Self {
+    pub const fn from_raw_parts(
+        phf: Phf<'phf, K, H>,
+        data: BorrowedOrOwnedSlice<'data, Option<(K, V)>>,
+        len: usize,
+    ) -> Self {
+        Self { phf, data, len }
+    }
+
+    /// Try to generate a perfect hash map.
+    ///
+    /// There must not be duplicate keys in the input.
+    ///
+    /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
+    /// in this case. For infinite hash families, this function either hangs or returns `Some`.
+    #[cfg(feature = "build")]
+    #[inline] // heavy, but monomorphized anyway
+    #[must_use]
+    pub fn try_from_entries(entries: alloc::vec::Vec<(K, V)>) -> Option<Self> {
+        let len = entries.len();
+        let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
+        let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
+        super::scatter::scatter(entries, |(key, _)| phf.hash(key), &mut data);
+        Some(Self::from_raw_parts(
             phf,
-            data,
+            BorrowedOrOwnedSlice::Owned(data),
             len,
-            marker: PhantomData,
-        }
+        ))
+    }
+
+    /// Generate a perfect hash map.
+    ///
+    /// There must not be duplicate keys in the input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying imperfect hash function family is finite and generation didn't
+    /// succeed.
+    #[cfg(feature = "build")]
+    #[inline]
+    #[must_use]
+    pub fn from_entries(entries: alloc::vec::Vec<(K, V)>) -> Self {
+        Self::try_from_entries(entries).expect("ran out of imperfect hash family instances")
     }
 
     /// Get a key-value pair by key.

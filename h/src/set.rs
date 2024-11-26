@@ -1,40 +1,63 @@
-use super::hashed::Phf;
-use crate::hash::{GenericHasher, ImperfectHasher};
+use super::{
+    hash::{GenericHasher, ImperfectHasher},
+    BorrowedOrOwnedSlice, Phf,
+};
 use core::borrow::Borrow;
-use core::marker::PhantomData;
-use core::ops::Deref;
 
 /// A perfect hash set.
-///
-/// This type supports most read-only methods that [`std::collections::HashSet`] supports.
-///
-/// By default, [`Set`] can be both built and used in runtime. Use [`StaticSet`] and [`static_set!`]
-/// when the data is available in compile time, as this results in better performance.
-#[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Set<T, C, D, H: ImperfectHasher<T> = GenericHasher> {
-    phf: Phf<T, D, H>,
-    data: C,
+pub struct Set<'phf, 'data, T: 'data, H: ImperfectHasher<T> = GenericHasher> {
+    phf: Phf<'phf, T, H>,
+    data: BorrowedOrOwnedSlice<'data, Option<T>>,
     len: usize,
-    marker: PhantomData<T>,
 }
 
-impl<T, C, D, H> Set<T, C, D, H>
-where
-    C: Deref<Target = [Option<T>]>,
-    D: Deref<Target = [u16]>,
-    H: ImperfectHasher<T>,
-{
+impl<'phf, 'data, T: 'data, H: ImperfectHasher<T>> Set<'phf, 'data, T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(phf: Phf<T, D, H>, data: C, len: usize) -> Self {
-        Self {
+    pub const fn from_raw_parts(
+        phf: Phf<'phf, T, H>,
+        data: BorrowedOrOwnedSlice<'data, Option<T>>,
+        len: usize,
+    ) -> Self {
+        Self { phf, data, len }
+    }
+
+    /// Try to generate a perfect hash set.
+    ///
+    /// There must not be duplicate elements in the input.
+    ///
+    /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
+    /// in this case. For infinite hash families, this function either hangs or returns `Some`.
+    #[cfg(feature = "build")]
+    #[inline] // heavy, but monomorphized anyway
+    #[must_use]
+    pub fn try_from_elements(elements: alloc::vec::Vec<T>) -> Option<Self> {
+        let len = elements.len();
+        let phf = Phf::try_from_keys(elements.iter())?;
+        let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
+        super::scatter::scatter(elements, |element| phf.hash(element), &mut data);
+        Some(Self::from_raw_parts(
             phf,
-            data,
+            BorrowedOrOwnedSlice::Owned(data),
             len,
-            marker: PhantomData,
-        }
+        ))
+    }
+
+    /// Generate a perfect hash set.
+    ///
+    /// There must not be duplicate elements in the input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying imperfect hash function family is finite and generation didn't
+    /// succeed.
+    #[cfg(feature = "build")]
+    #[inline]
+    #[must_use]
+    pub fn from_elements(elements: alloc::vec::Vec<T>) -> Self {
+        Self::try_from_elements(elements).expect("ran out of imperfect hash family instances")
     }
 
     /// Get a reference to the element if present.

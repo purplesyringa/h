@@ -2,61 +2,29 @@
 //!
 //! This crates provides fast [perfect hash functions][phf] and hash tables built upon them. A PHF
 //! is a hash function without collisions on a certain subset of keys. Static hash tables built upon
-//! such hashes don't need to resolve collisions, speeding up access time at expense of build time.
+//! such hashes don't need to resolve collisions, speeding up access time at the expense of build
+//! time.
 //!
 //! [phf]: https://en.wikipedia.org/wiki/Perfect_hash_function
-//!
-//! `h` provides collision-free hash maps, hash sets, and hash functions (whose output you can
-//! interpret yourself). It supports four use cases:
-//!
-//! - When the data is only available in runtime, use [`runtime::Map`]. It's slower to build than
-//!   [`HashMap`](std::collections::HashMap), but faster to access.
-//! - When the data is fixed, use [`constant::map!`] to build the table in compile-time.
-//! - When the data is fixed, but programmatically generated, use [`codegen`] to generate Rust code
-//!   in `build.rs` and then `include!` it.
-//! - When the data is too large or needs to be replaceable without recompiling the code, use
-//!   [`rkyv::Map`] to build the table, save it to a file, and then load it in runtime or with
-//!   `include_bytes!` using [`rkyv::access`].
 //!
 //!
 //! # Usage
 //!
-//! Add a dependency to `Cargo.toml`:
+//! `h` implements a hash [`Map`], a hash [`Set`], and a low-level [`Phf`].
 //!
-//! ```toml
-//! [dependencies]
-//! h = "0.1"
-//! ```
+//! These types can be initialized in several ways:
 //!
-//! Add `default-features = false` for `#![no_std]` support.
+//! 1. They can be built in runtime by calling `from_*` methods. This is slow, so consider
+//!    [`HashMap`](std::collections::HashMap) instead.
+//! 2. They can be built in compile time with macros, such as [`map!`]. Zero-cost in runtime.
+//! 3. They can be built in `build.rs` with `from_*`, translated to code with [`codegen`] and then
+//!    `include!`d. Zero-cost in runtime and supports programmatic generation.
+//! 4. They can be built, saved to a file, and then loaded back with [`rkyv`]. Zero-cost when
+//!    loading. Also consider using this instead of codegen for large data.
 //!
-//! Create and use a static hashmap:
-//!
-//! ```rust
-//! const TABLE: h::StaticMap<u32, usize> = h::static_map! {
-//!     2648081974 => 123,
-//!     127361636 => 456,
-//!     3593220713 => 789,
-//! };
-//!
-//! assert_eq!(TABLE.get(&127361636), Some(&456));
-//! assert_eq!(TABLE.get(&123), None);
-//! ```
-//!
-//!
-//! # Advanced examples
-//!
-//! Programmatically code-gen a map in `build.rs`:
-//!
-//! ```rust
-//! let table: h::Map<u32, usize> = h::Map::from_entries(vec![
-//!     (2648081974, 123),
-//!     (127361636, 456),
-//!     (3593220713, 789),
-//! ]);
-//!
-//! let code = h::codegen::CodeGenerator::new().generate(&table);
-//! ```
+//! The types can either own the data (when constructed manually) or borrow it (when constructed
+//! with macros or deserialized with [`rkyv`]). Lifetime parameters specify the duration of that
+//! borrow; use `'static` if the data is owned.
 
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -132,18 +100,42 @@ extern crate alloc;
 extern crate std;
 
 pub mod codegen;
-pub mod constant;
-pub mod generic;
 pub mod hash;
-pub mod runtime;
+mod map;
+mod phf;
+pub(crate) mod scatter;
+mod set;
+pub(crate) mod unhashed;
 
-// pub use hashed::Phf;
-// pub use map::{Map, StaticMap};
-// pub use set::{Set, StaticSet};
+pub use map::Map;
+pub use phf::Phf;
+pub use set::Set;
 
 #[doc(hidden)]
 pub mod low_level {
-    pub use super::generic::unhashed::{Mixer, Phf as UnhashedPhf};
+    pub use super::unhashed::{Mixer, Phf as UnhashedPhf};
+}
+
+#[derive(Clone, Debug)]
+#[doc(hidden)]
+#[non_exhaustive]
+pub enum BorrowedOrOwnedSlice<'a, T> {
+    Borrowed(&'a [T]),
+    #[cfg(feature = "alloc")]
+    Owned(alloc::vec::Vec<T>),
+}
+
+impl<T> core::ops::Deref for BorrowedOrOwnedSlice<'_, T> {
+    type Target = [T];
+
+    #[inline]
+    fn deref(&self) -> &[T] {
+        match self {
+            Self::Borrowed(r) => r,
+            #[cfg(feature = "alloc")]
+            Self::Owned(o) => o,
+        }
+    }
 }
 
 #[cfg(test)]
