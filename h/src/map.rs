@@ -144,10 +144,11 @@ where
 {
     #[inline]
     fn generate_piece(&self, gen: &mut crate::codegen::CodeGenerator) -> proc_macro2::TokenStream {
-        let static_map = gen.path("h::Map");
+        let map = gen.path("h::Map");
+        let borrowed = gen.path("h::BorrowedOrOwnedSlice::Borrowed");
         let phf = gen.piece(&self.phf);
         let data = gen.piece(&&*self.data);
         let len = gen.piece(&self.len);
-        quote::quote!(#static_map::from_raw_parts(#phf, #data, #len))
+        quote::quote!(#map::from_raw_parts(#phf, #borrowed(#data), #len))
     }
 }

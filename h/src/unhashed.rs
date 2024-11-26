@@ -476,7 +476,7 @@ impl super::codegen::Codegen for Phf<'_> {
         let hash_space = gen.piece(&self.hash_space);
         let hash_space_with_oob = gen.piece(&self.hash_space_with_oob);
         let bucket_shift = gen.piece(&self.bucket_shift);
-        let displacements = gen.piece(&*self.displacements);
+        let displacements = gen.piece(&&*self.displacements);
         let mixer = gen.piece(&self.mixer);
         quote::quote!(
             #unhashed_phf::from_raw_parts(

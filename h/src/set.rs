@@ -113,10 +113,11 @@ where
 {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
-        let static_set = gen.path("h::Set");
+        let set = gen.path("h::Set");
+        let borrowed = gen.path("h::BorrowedOrOwnedSlice::Borrowed");
         let phf = gen.piece(&self.phf);
         let data = gen.piece(&&*self.data);
         let len = gen.piece(&self.len);
-        quote::quote!(#static_set::from_raw_parts(#phf, #data, #len))
+        quote::quote!(#set::from_raw_parts(#phf, #borrowed(#data), #len))
     }
 }

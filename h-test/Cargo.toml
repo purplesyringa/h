@@ -7,7 +7,7 @@ edition = "2021"
 h = { path = "../h" }
 
 [build-dependencies]
-h = { path = "../h", features = ["codegen"] }
+h = { path = "../h", features = ["build", "codegen"] }
 zstd = "0.13.2"
 
 [features]
