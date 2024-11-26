@@ -60,6 +60,21 @@ impl<'a, T, H: ImperfectHasher<T>> Set<'a, T, H> {
         Self::try_from_elements(elements).expect("ran out of imperfect hash family instances")
     }
 
+    /// Produce a copy of [`Set`] that references this one instead of owning data.
+    ///
+    /// This is useful for code generation, so that references to slices are generated to statics
+    /// instead of dynamically allocated vectors, so that [`Set`] can be initialized in a `const`
+    /// context.
+    #[cfg(feature = "build")]
+    #[inline]
+    pub fn borrow(&self) -> Set<'_, T, H> {
+        Set {
+            phf: self.phf.borrow(),
+            data: BorrowedOrOwnedSlice::Borrowed(&*self.data),
+            len: self.len,
+        }
+    }
+
     /// Get a reference to the element if present.
     #[inline]
     pub fn get<Q>(&self, value: &Q) -> Option<&T>
@@ -114,10 +129,9 @@ where
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let set = gen.path("h::Set");
-        let borrowed = gen.path("h::BorrowedOrOwnedSlice::Borrowed");
         let phf = gen.piece(&self.phf);
-        let data = gen.piece(&&*self.data);
+        let data = gen.piece(&self.data);
         let len = gen.piece(&self.len);
-        quote::quote!(#set::from_raw_parts(#phf, #borrowed(#data), #len))
+        quote::quote!(#set::from_raw_parts(#phf, #data, #len))
     }
 }

@@ -24,6 +24,6 @@ fn main() {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
     let h_map = h::Map::<&[u8], usize>::from_entries(entries.clone());
-    let h_code = CodeGenerator::new().generate(&h_map);
+    let h_code = CodeGenerator::new().generate(&h_map.borrow());
     std::fs::write(out_dir.join("english_h.rs"), h_code.to_string()).unwrap();
 }

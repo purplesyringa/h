@@ -84,6 +84,16 @@ impl<'a> Phf<'a> {
             .or_else(|| buckets.try_generate_phf(Mixer::Xor))
     }
 
+    /// Produce a copy of [`Phf`] that references this one instead of owning data.
+    #[cfg(feature = "build")]
+    #[inline]
+    pub fn borrow(&self) -> Phf<'_> {
+        Phf {
+            displacements: BorrowedOrOwnedSlice::Borrowed(&*self.displacements),
+            ..*self
+        }
+    }
+
     /// Hash a key.
     ///
     /// The whole point. Guaranteed to return different indices for different keys from the training

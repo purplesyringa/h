@@ -60,6 +60,21 @@ impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
         Self::try_from_entries(entries).expect("ran out of imperfect hash family instances")
     }
 
+    /// Produce a copy of [`Map`] that references this one instead of owning data.
+    ///
+    /// This is useful for code generation, so that references to slices are generated to statics
+    /// instead of dynamically allocated vectors, so that [`Map`] can be initialized in a `const`
+    /// context.
+    #[cfg(feature = "build")]
+    #[inline]
+    pub fn borrow(&self) -> Map<'_, K, V, H> {
+        Map {
+            phf: self.phf.borrow(),
+            data: BorrowedOrOwnedSlice::Borrowed(&*self.data),
+            len: self.len,
+        }
+    }
+
     /// Get a key-value pair by key.
     #[inline]
     pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
@@ -145,10 +160,9 @@ where
     #[inline]
     fn generate_piece(&self, gen: &mut crate::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let map = gen.path("h::Map");
-        let borrowed = gen.path("h::BorrowedOrOwnedSlice::Borrowed");
         let phf = gen.piece(&self.phf);
-        let data = gen.piece(&&*self.data);
+        let data = gen.piece(&self.data);
         let len = gen.piece(&self.len);
-        quote::quote!(#map::from_raw_parts(#phf, #borrowed(#data), #len))
+        quote::quote!(#map::from_raw_parts(#phf, #data, #len))
     }
 }

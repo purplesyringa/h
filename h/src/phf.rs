@@ -102,6 +102,20 @@ impl<'a, T, H: ImperfectHasher<T>> Phf<'a, T, H> {
         Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
     }
 
+    /// Produce a copy of [`Phf`] that references this one instead of owning data.
+    ///
+    /// This is useful for code generation, so that references to slices are generated to statics
+    /// instead of dynamically allocated vectors, so that [`Phf`] can be initialized in a `const`
+    /// context.
+    #[cfg(feature = "build")]
+    #[inline]
+    pub fn borrow(&self) -> Phf<'_, T, H> {
+        Phf {
+            hash_instance: self.hash_instance.clone(),
+            unhashed_phf: self.unhashed_phf.borrow(),
+        }
+    }
+
     /// Hash a key.
     ///
     /// The whole point. Guaranteed to return different indices for different keys from the training

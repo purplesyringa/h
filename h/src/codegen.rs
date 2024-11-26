@@ -4,8 +4,15 @@
 //!
 //! This module is useful for generating tables programmatically in `build.rs`.
 //!
-//! Scalars, tuples, strings, and hash tables can be codegen-ed. For your own keys, you'll need to
+//! Scalars, tuples, strings, and hash tables can be codegen-ed. For custom types, you'll need to
 //! implement the [`Codegen`] trait manually.
+//!
+//! **Warning**. Runtime-constructed hash tables own the values and store them in a [`Vec`].
+//! [`Codegen`] doesn't try to guess your intentions, so the generated code will create a vector,
+//! even in a `const` context. To prevent this, call `.borrow()` on the hash table beforehand, so
+//! that a reference to a `static` is generated instead. This is not the default behavior, as
+//! runtime initialization is necessary if the value cannot be constructed in `const`.
+//!
 //!
 //! # Example
 //!
@@ -15,13 +22,14 @@
 //! let map: h::Map<i32, i32> = h::Map::from_entries(vec![(1, 2), (3, 4)]);
 //!
 //! // Convert to code
-//! let code = h::codegen::CodeGenerator::new().generate(&map);
+//! let code = h::codegen::CodeGenerator::new().generate(&map.borrow());
 //!
 //! // `code` can now be saved to an `.rs` file and then loaded with `include!`
 //! # Ok(())
 //! # }
 //! ```
 
+use super::BorrowedOrOwnedSlice;
 use alloc::borrow::{Cow, ToOwned};
 use alloc::format;
 use alloc::string::String;
@@ -127,7 +135,7 @@ impl CodeGenerator {
             return quote!(#alias);
         }
 
-        if path.split_once("..").unwrap_or((path, "")).0 == "alloc" {
+        if path.split_once("::").unwrap_or((path, "")).0 == "alloc" {
             self.alloc_wanted = true;
         }
 
@@ -260,6 +268,25 @@ impl<T: ?Sized + ToOwned<Owned: Codegen> + Codegen> Codegen for Cow<'_, T> {
             }
             Cow::Owned(o) => {
                 let owned = gen.path("alloc::borrow::Cow::Owned");
+                let target = gen.piece(o);
+                quote!(#owned(#target))
+            }
+        }
+    }
+}
+
+impl<T: Codegen> Codegen for BorrowedOrOwnedSlice<'_, T> {
+    #[inline]
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        match self {
+            Self::Borrowed(b) => {
+                let borrowed = gen.path("h::BorrowedOrOwnedSlice::Borrowed");
+                let target = gen.piece(b);
+                quote!(#borrowed(#target))
+            }
+            #[cfg(feature = "alloc")]
+            Self::Owned(o) => {
+                let owned = gen.path("h::BorrowedOrOwnedSlice::Owned");
                 let target = gen.piece(o);
                 quote!(#owned(#target))
             }
