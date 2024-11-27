@@ -26,3 +26,6 @@ alloc = []
 build = ["alloc", "dep:radsort"]
 codegen = ["std", "dep:proc-macro2", "dep:quote"]
 std = ["alloc"]
+
+[package.metadata.docs.rs]
+all-features = true
