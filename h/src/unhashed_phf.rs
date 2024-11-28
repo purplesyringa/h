@@ -71,7 +71,7 @@ impl UnhashedPhf {
             return Some(Self {
                 hash_space: 0,
                 hash_space_with_oob: 1,
-                bucket_shift: 31,
+                bucket_shift: 63,
                 displacements: ConstVec::from(&[0, 0][..]),
                 mixer: Mixer::Add,
             });
