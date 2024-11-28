@@ -34,6 +34,7 @@
 //! - `build`: Enables `from_*` methods. Necessary for runtime building or programmatic generation
 //!   in `build.rs`.
 //! - `codegen`: Enables [`codegen`]. Necessary for programmatic generation in `build.rs`.
+//! - `rkyv`: Enables [rkyv](https://rkyv.org/)-based serialization/deserialization.
 
 #![no_std]
 #![cfg_attr(doc, feature(doc_auto_cfg))]

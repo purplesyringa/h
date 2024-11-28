@@ -14,7 +14,7 @@ proc-macro2 = { version = "1", optional = true, default-features = false }
 quote = { version = "1", optional = true }
 radsort = { version = "0.1.1", optional = true }
 rapidhash = { version = "1.1.0", default-features = false }
-rkyv = { version = "0.8.8", default-features = false }
+rkyv = { version = "0.8.8", optional = true, default-features = false }
 typeid = "1.0.2"
 
 [dev-dependencies]
@@ -25,6 +25,7 @@ default = ["std"]
 alloc = []
 build = ["alloc", "dep:radsort"]
 codegen = ["std", "dep:proc-macro2", "dep:quote"]
+rkyv = ["dep:rkyv"]
 std = ["alloc"]
 
 [package.metadata.docs.rs]
