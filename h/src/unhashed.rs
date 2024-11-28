@@ -1,6 +1,6 @@
 #![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
 
-use super::BorrowedOrOwnedSlice;
+use super::const_vec::ConstVec;
 
 #[cfg(feature = "build")]
 use alloc::{vec, vec::Vec};
@@ -16,7 +16,7 @@ const _: () = assert!(
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Phf<'a> {
+pub struct Phf {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     hash_space: usize,
 
@@ -27,13 +27,13 @@ pub struct Phf<'a> {
     bucket_shift: u32,
 
     /// Per-bucket displacement values
-    displacements: BorrowedOrOwnedSlice<'a, u16>,
+    displacements: ConstVec<u16>,
 
     /// How the displacement is mixed into the approximate position
     mixer: Mixer,
 }
 
-impl<'a> Phf<'a> {
+impl Phf {
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -41,14 +41,14 @@ impl<'a> Phf<'a> {
         hash_space: usize,
         hash_space_with_oob: usize,
         bucket_shift: u32,
-        displacements: &'a [u16],
+        displacements: &'static [u16],
         mixer: Mixer,
     ) -> Self {
         Self {
             hash_space,
             hash_space_with_oob,
             bucket_shift,
-            displacements: BorrowedOrOwnedSlice::Borrowed(displacements),
+            displacements: ConstVec::from_static_ref(displacements),
             mixer,
         }
     }
@@ -72,7 +72,7 @@ impl<'a> Phf<'a> {
                 hash_space: 0,
                 hash_space_with_oob: 1,
                 bucket_shift: 31,
-                displacements: BorrowedOrOwnedSlice::Borrowed(&[0, 0]),
+                displacements: ConstVec::from(&[0, 0][..]),
                 mixer: Mixer::Add,
             });
         }
@@ -82,16 +82,6 @@ impl<'a> Phf<'a> {
         buckets
             .try_generate_phf(Mixer::Add)
             .or_else(|| buckets.try_generate_phf(Mixer::Xor))
-    }
-
-    /// Produce a copy of [`Phf`] that references this one instead of owning data.
-    #[cfg(feature = "build")]
-    #[inline]
-    pub fn borrow(&self) -> Phf<'_> {
-        Phf {
-            displacements: BorrowedOrOwnedSlice::Borrowed(&*self.displacements),
-            ..*self
-        }
     }
 
     /// Hash a key.
@@ -261,7 +251,7 @@ impl Buckets {
     /// Attempt to generate a PHF with the given mixer. May fail.
     ///
     /// Hash space must be at least somewhat larger than the number of keys.
-    fn try_generate_phf<'a>(&self, mixer: Mixer) -> Option<Phf<'a>> {
+    fn try_generate_phf(&self, mixer: Mixer) -> Option<Phf> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
         let alloc = self.hash_space + u16::MAX as usize;
         let mut free = vec![u8::MAX; alloc.div_ceil(8)];
@@ -295,7 +285,7 @@ impl Buckets {
             hash_space: self.hash_space,
             hash_space_with_oob,
             bucket_shift: self.bucket_shift,
-            displacements: BorrowedOrOwnedSlice::Owned(displacements),
+            displacements: displacements.into(),
             mixer,
         })
     }
@@ -479,7 +469,7 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
 };
 
 #[cfg(feature = "codegen")]
-impl super::codegen::Codegen for Phf<'_> {
+impl super::codegen::Codegen for Phf {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let unhashed_phf = gen.path("h::low_level::UnhashedPhf");

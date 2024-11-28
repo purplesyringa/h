@@ -9,15 +9,21 @@
 //! different platforms (in case of cross-compilation) and with different crate features. Your
 //! codegen logic might need to take this into consideration.
 //!
-//! <div class="warning">
 //!
-//! Runtime-constructed hash tables own the values and store them in a [`Vec`]. [`Codegen`] doesn't
-//! try to guess your intentions, so the generated code will create a vector, even in a `const`
-//! context. To prevent this, call `.borrow()` on the hash table beforehand, so that a reference to
-//! a `static` is generated instead. This is not the default behavior, as runtime initialization is
-//! necessary if the value cannot be constructed in `const`.
+//! # Mutability and `const`
 //!
-//! </div>
+//! The generated code can be tweaked for two use cases: if the resulting value should be mutable or
+//! should stay immutable. Here, mutability includes interior mutability.
+//!
+//! By default, immutable objects are generated. They can be used in a `const` context and don't
+//! require dynamic allocations if the types support that (i.e. unless `Vec`, `Box`, or other types
+//! with non-`const` constructors are used). Attempting to mutate such objects may work, fail to
+//! compile, panic, or lead to any other outcome (but not cause UB).
+//!
+//! If `set_mutability(true)` is called on the [`CodeGenerator`], mutable objects are generated.
+//! Such objects can be placed to a mutable variable and modified, and `Cell`s inside such objects
+//! may safely be interacted with. However, to hold this property, heap allocations might be
+//! necessary, making the code not `const`-friendly.
 //!
 //!
 //! # Example
@@ -28,14 +34,18 @@
 //! let map: h::Map<i32, i32> = h::Map::from_entries(vec![(1, 2), (3, 4)]);
 //!
 //! // Convert to code
-//! let code = h::codegen::CodeGenerator::new().generate(&map.borrow());
+//! let code = h::codegen::CodeGenerator::new().generate(&map);
 //!
-//! // `code` can now be saved to an `.rs` file and then loaded with `include!`
+//! // TODO: Save code to a file
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! ```ignore
+//! // Constant immutable map
+//! const MAP: h::Map<i32, i32> = include!("path/to/generated/code.rs");
+//! ```
 
-use super::BorrowedOrOwnedSlice;
 use alloc::borrow::{Cow, ToOwned};
 use alloc::format;
 use alloc::string::String;
@@ -50,6 +60,7 @@ pub struct CodeGenerator {
     path_to_alias: HashMap<String, Ident>,
     aliases: HashSet<String>,
     alloc_wanted: bool,
+    mutability: bool,
 }
 
 impl CodeGenerator {
@@ -62,7 +73,18 @@ impl CodeGenerator {
             path_to_alias: HashMap::new(),
             aliases: HashSet::new(),
             alloc_wanted: false,
+            mutability: false,
         }
+    }
+
+    /// Generate code for a mutable object.
+    ///
+    /// This is necessary if you want to modify the resulting object, including via interior
+    /// mutability. If this option is disabled, the generated objects might reference constant
+    /// static data, but are usable in a `const` context.
+    #[inline]
+    pub fn set_mutability(&mut self, mutability: bool) {
+        self.mutability = mutability;
     }
 
     /// Configure name-to-path mapping for crates.
@@ -70,8 +92,16 @@ impl CodeGenerator {
     /// By default, `h` is mapped to `::h`. Reconfiguring this might be necessary if you want to
     /// generate code with `h` from a proc-macro.
     #[inline]
-    pub fn with_crate(&mut self, name: &str, path: TokenStream) {
+    pub fn set_crate(&mut self, name: &str, path: TokenStream) {
         self.crate_paths.insert(name.into(), path);
+    }
+
+    /// Check if generating code for a mutable context.
+    ///
+    /// See the documentation for [`set_mutability`] for an explanation.
+    #[inline]
+    pub fn mutability(&self) -> bool {
+        self.mutability
     }
 
     /// Turn a value into code.
@@ -127,7 +157,7 @@ impl CodeGenerator {
     /// this path must be `use`able. This is different from using the path directly for two reasons:
     ///
     /// - This method resolves crates according to the paths configured by
-    ///   [`CodeGenerator::with_crate`].
+    ///   [`CodeGenerator::set_crate`].
     /// - This method replaces long paths with short aliases imported just once with `use`, reducing
     ///   code size.
     #[inline]
@@ -274,25 +304,6 @@ impl<T: ?Sized + ToOwned<Owned: Codegen> + Codegen> Codegen for Cow<'_, T> {
             }
             Cow::Owned(o) => {
                 let owned = gen.path("alloc::borrow::Cow::Owned");
-                let target = gen.piece(o);
-                quote!(#owned(#target))
-            }
-        }
-    }
-}
-
-impl<T: Codegen> Codegen for BorrowedOrOwnedSlice<'_, T> {
-    #[inline]
-    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
-        match self {
-            Self::Borrowed(b) => {
-                let borrowed = gen.path("h::BorrowedOrOwnedSlice::Borrowed");
-                let target = gen.piece(b);
-                quote!(#borrowed(#target))
-            }
-            #[cfg(feature = "alloc")]
-            Self::Owned(o) => {
-                let owned = gen.path("h::BorrowedOrOwnedSlice::Owned");
                 let target = gen.piece(o);
                 quote!(#owned(#target))
             }

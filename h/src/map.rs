@@ -1,24 +1,25 @@
 use super::{
+    const_vec::ConstVec,
     hash::{GenericHasher, ImperfectHasher},
-    BorrowedOrOwnedSlice, Phf,
+    Phf,
 };
 use core::borrow::Borrow;
 
 /// A perfect hash map.
 #[non_exhaustive]
-pub struct Map<'a, K, V, H: ImperfectHasher<K> = GenericHasher> {
-    phf: Phf<'a, K, H>,
-    data: BorrowedOrOwnedSlice<'a, Option<(K, V)>>,
+pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher> {
+    phf: Phf<K, H>,
+    data: ConstVec<Option<(K, V)>>,
     len: usize,
 }
 
-impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
+impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
     pub const fn from_raw_parts(
-        phf: Phf<'a, K, H>,
-        data: BorrowedOrOwnedSlice<'a, Option<(K, V)>>,
+        phf: Phf<K, H>,
+        data: ConstVec<Option<(K, V)>>,
         len: usize,
     ) -> Self {
         Self { phf, data, len }
@@ -38,11 +39,11 @@ impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
         let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
         super::scatter::scatter(entries, |(key, _)| phf.hash(key), &mut data);
-        Some(Self::from_raw_parts(
+        Some(Self {
             phf,
-            BorrowedOrOwnedSlice::Owned(data),
+            data: data.into(),
             len,
-        ))
+        })
     }
 
     /// Generate a perfect hash map.
@@ -60,21 +61,6 @@ impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
         Self::try_from_entries(entries).expect("ran out of imperfect hash family instances")
     }
 
-    /// Produce a copy of [`Map`] that references this one instead of owning data.
-    ///
-    /// This is useful for code generation, so that references to slices are generated to statics
-    /// instead of dynamically allocated vectors, so that [`Map`] can be initialized in a `const`
-    /// context.
-    #[cfg(feature = "build")]
-    #[inline]
-    pub fn borrow(&self) -> Map<'_, K, V, H> {
-        Map {
-            phf: self.phf.borrow(),
-            data: BorrowedOrOwnedSlice::Borrowed(&*self.data),
-            len: self.len,
-        }
-    }
-
     /// Get a key-value pair by key.
     #[inline]
     pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
@@ -89,6 +75,20 @@ impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
             .map(|(k, v)| (k, v))
     }
 
+    /// Get a key-value pair by key, with a mutable reference to the value.
+    #[inline]
+    pub fn get_key_value_mut<Q>(&mut self, key: &Q) -> Option<(&K, &mut V)>
+    where
+        K: Borrow<Q>,
+        Q: ?Sized + Eq,
+        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
+    {
+        unsafe { self.data.get_unchecked_mut(self.phf.hash(key)) }
+            .as_mut()
+            .filter(|(k, _)| k.borrow() == key)
+            .map(|(k, v)| (k as &K, v))
+    }
+
     /// Get a value by key.
     #[inline]
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
@@ -98,6 +98,17 @@ impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
         H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
     {
         self.get_key_value(key).map(|(_, v)| v)
+    }
+
+    /// Get a mutable reference to the value by key.
+    #[inline]
+    pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
+    where
+        K: Borrow<Q>,
+        Q: ?Sized + Eq,
+        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
+    {
+        self.get_key_value_mut(key).map(|(_, v)| v)
     }
 
     /// Check if the hashmap contains a key.
@@ -133,6 +144,16 @@ impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
             .filter_map(|pair| pair.as_ref().map(|(k, v)| (k, v)))
     }
 
+    /// Iterate through elements mutably.
+    ///
+    /// The iteration order is unspecified, but is constant for a given map.
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut V)> {
+        self.data
+            .iter_mut()
+            .filter_map(|pair| pair.as_mut().map(|(k, v)| (k as &K, v)))
+    }
+
     /// Iterate through keys.
     ///
     /// The iteration order is unspecified, but is constant for a given map.
@@ -148,12 +169,20 @@ impl<'a, K, V, H: ImperfectHasher<K>> Map<'a, K, V, H> {
     pub fn values(&self) -> impl Iterator<Item = &V> {
         self.iter().map(|(_, v)| v)
     }
+
+    /// Iterate through values mutably.
+    ///
+    /// The iteration order is unspecified, but is constant for a given map.
+    #[inline]
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+        self.iter_mut().map(|(_, v)| v)
+    }
 }
 
 #[cfg(feature = "codegen")]
-impl<'a, K, V, H: ImperfectHasher<K>> crate::codegen::Codegen for Map<'a, K, V, H>
+impl<K, V, H: ImperfectHasher<K>> crate::codegen::Codegen for Map<K, V, H>
 where
-    Phf<'a, K, H>: crate::codegen::Codegen,
+    Phf<K, H>: crate::codegen::Codegen,
     K: crate::codegen::Codegen,
     V: crate::codegen::Codegen,
 {

@@ -10,8 +10,11 @@
 //!
 //! # Usage
 //!
-//! `h` implements a [`Map`], a [`Set`], and a low-level [`Phf`]. These types can be initialized in
-//! several ways:
+//! `h` implements a [`Map`], a [`Set`], and a low-level [`Phf`]. These types are constructed once
+//! and cannot be modified afterwards, with an exception that the values of existing keys in [`Map`]
+//! can be updated.
+//!
+//! These types can be initialized in several ways:
 //!
 //! 1. Built in runtime by calling `from_*` methods. (This is slow, so profile against
 //!    [`HashMap`](std::collections::HashMap).)
@@ -20,10 +23,6 @@
 //!    Zero-cost in runtime and supports programmatic generation, even for non-serializable types.
 //! 4. Built, saved to a file, and then loaded back with [rkyv](https://rkyv.org/). Zero-cost when
 //!    loading. Also consider using this instead of codegen for large data.
-//!
-//! The types can either own the data (when constructed in runtime) or borrow it (when constructed
-//! in compile time or deserialized with [rkyv](https://rkyv.org/)). Lifetime parameters specify the
-//! duration of that borrow, if it's present; in many cases, it can just be `'static`.
 //!
 //!
 //! # Features
@@ -111,6 +110,7 @@ extern crate alloc;
 extern crate std;
 
 pub mod codegen;
+mod const_vec;
 pub mod hash;
 mod map;
 mod phf;
@@ -124,29 +124,8 @@ pub use set::Set;
 
 #[doc(hidden)]
 pub mod low_level {
+    pub use super::const_vec::ConstVec;
     pub use super::unhashed::{Mixer, Phf as UnhashedPhf};
-}
-
-#[derive(Clone, Debug)]
-#[doc(hidden)]
-#[non_exhaustive]
-pub enum BorrowedOrOwnedSlice<'a, T> {
-    Borrowed(&'a [T]),
-    #[cfg(feature = "alloc")]
-    Owned(alloc::vec::Vec<T>),
-}
-
-impl<T> core::ops::Deref for BorrowedOrOwnedSlice<'_, T> {
-    type Target = [T];
-
-    #[inline]
-    fn deref(&self) -> &[T] {
-        match self {
-            Self::Borrowed(r) => r,
-            #[cfg(feature = "alloc")]
-            Self::Owned(o) => o,
-        }
-    }
 }
 
 #[cfg(test)]

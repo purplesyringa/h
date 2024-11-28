@@ -1,26 +1,23 @@
 use super::{
+    const_vec::ConstVec,
     hash::{GenericHasher, ImperfectHasher},
-    BorrowedOrOwnedSlice, Phf,
+    Phf,
 };
 use core::borrow::Borrow;
 
 /// A perfect hash set.
 #[non_exhaustive]
-pub struct Set<'a, T, H: ImperfectHasher<T> = GenericHasher> {
-    phf: Phf<'a, T, H>,
-    data: BorrowedOrOwnedSlice<'a, Option<T>>,
+pub struct Set<T, H: ImperfectHasher<T> = GenericHasher> {
+    phf: Phf<T, H>,
+    data: ConstVec<Option<T>>,
     len: usize,
 }
 
-impl<'a, T, H: ImperfectHasher<T>> Set<'a, T, H> {
+impl<T, H: ImperfectHasher<T>> Set<T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(
-        phf: Phf<'a, T, H>,
-        data: BorrowedOrOwnedSlice<'a, Option<T>>,
-        len: usize,
-    ) -> Self {
+    pub const fn from_raw_parts(phf: Phf<T, H>, data: ConstVec<Option<T>>, len: usize) -> Self {
         Self { phf, data, len }
     }
 
@@ -38,11 +35,11 @@ impl<'a, T, H: ImperfectHasher<T>> Set<'a, T, H> {
         let phf = Phf::try_from_keys(elements.iter())?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
         super::scatter::scatter(elements, |element| phf.hash(element), &mut data);
-        Some(Self::from_raw_parts(
+        Some(Self {
             phf,
-            BorrowedOrOwnedSlice::Owned(data),
+            data: data.into(),
             len,
-        ))
+        })
     }
 
     /// Generate a perfect hash set.
@@ -58,21 +55,6 @@ impl<'a, T, H: ImperfectHasher<T>> Set<'a, T, H> {
     #[must_use]
     pub fn from_elements(elements: alloc::vec::Vec<T>) -> Self {
         Self::try_from_elements(elements).expect("ran out of imperfect hash family instances")
-    }
-
-    /// Produce a copy of [`Set`] that references this one instead of owning data.
-    ///
-    /// This is useful for code generation, so that references to slices are generated to statics
-    /// instead of dynamically allocated vectors, so that [`Set`] can be initialized in a `const`
-    /// context.
-    #[cfg(feature = "build")]
-    #[inline]
-    pub fn borrow(&self) -> Set<'_, T, H> {
-        Set {
-            phf: self.phf.borrow(),
-            data: BorrowedOrOwnedSlice::Borrowed(&*self.data),
-            len: self.len,
-        }
     }
 
     /// Get a reference to the element if present.
@@ -121,9 +103,9 @@ impl<'a, T, H: ImperfectHasher<T>> Set<'a, T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<'a, T, H: ImperfectHasher<T>> super::codegen::Codegen for Set<'a, T, H>
+impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Set<T, H>
 where
-    Phf<'a, T, H>: super::codegen::Codegen,
+    Phf<T, H>: super::codegen::Codegen,
     T: super::codegen::Codegen,
 {
     #[inline]

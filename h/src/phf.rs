@@ -8,16 +8,16 @@ use super::{
 /// A mapping from `T` to numbers from `0` to `N - 1`, injective over the training key set. `N`
 /// might be larger than the size of the training key set.
 #[non_exhaustive]
-pub struct Phf<'a, T, H: ImperfectHasher<T> = GenericHasher> {
+pub struct Phf<T, H: ImperfectHasher<T> = GenericHasher> {
     hash_instance: H::Instance,
-    unhashed_phf: UnhashedPhf<'a>,
+    unhashed_phf: UnhashedPhf,
 }
 
-impl<'a, T, H: ImperfectHasher<T>> Phf<'a, T, H> {
+impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(hash_instance: H::Instance, unhashed_phf: UnhashedPhf<'a>) -> Self {
+    pub const fn from_raw_parts(hash_instance: H::Instance, unhashed_phf: UnhashedPhf) -> Self {
         Self {
             hash_instance,
             unhashed_phf,
@@ -102,20 +102,6 @@ impl<'a, T, H: ImperfectHasher<T>> Phf<'a, T, H> {
         Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
     }
 
-    /// Produce a copy of [`Phf`] that references this one instead of owning data.
-    ///
-    /// This is useful for code generation, so that references to slices are generated to statics
-    /// instead of dynamically allocated vectors, so that [`Phf`] can be initialized in a `const`
-    /// context.
-    #[cfg(feature = "build")]
-    #[inline]
-    pub fn borrow(&self) -> Phf<'_, T, H> {
-        Phf {
-            hash_instance: self.hash_instance.clone(),
-            unhashed_phf: self.unhashed_phf.borrow(),
-        }
-    }
-
     /// Hash a key.
     ///
     /// The whole point. Guaranteed to return different indices for different keys from the training
@@ -143,7 +129,7 @@ impl<'a, T, H: ImperfectHasher<T>> Phf<'a, T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Phf<'_, T, H>
+impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Phf<T, H>
 where
     H::Instance: super::codegen::Codegen,
 {
