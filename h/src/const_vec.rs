@@ -19,6 +19,7 @@ enum Inner<T> {
 unsafe impl<T: Sync> Sync for Inner<T> {}
 
 impl<T> ConstVec<T> {
+    #[inline]
     pub const fn from_static_ref(arr: &'static [T]) -> Self {
         Self {
             inner: Inner::CompileTime(arr),
@@ -27,6 +28,7 @@ impl<T> ConstVec<T> {
 }
 
 impl<T> From<&'static [T]> for ConstVec<T> {
+    #[inline]
     fn from(arr: &'static [T]) -> Self {
         Self::from_static_ref(arr)
     }
@@ -34,6 +36,7 @@ impl<T> From<&'static [T]> for ConstVec<T> {
 
 #[cfg(feature = "alloc")]
 impl<T> From<alloc::vec::Vec<T>> for ConstVec<T> {
+    #[inline]
     fn from(vec: alloc::vec::Vec<T>) -> Self {
         Self {
             inner: Inner::RunTime(vec),

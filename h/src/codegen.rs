@@ -100,7 +100,8 @@ impl CodeGenerator {
     ///
     /// See the documentation for [`set_mutability`] for an explanation.
     #[inline]
-    pub fn mutability(&self) -> bool {
+    #[must_use]
+    pub const fn mutability(&self) -> bool {
         self.mutability
     }
 
