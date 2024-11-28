@@ -16,7 +16,7 @@ const _: () = assert!(
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Phf {
+pub struct UnhashedPhf {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     hash_space: usize,
 
@@ -33,7 +33,7 @@ pub struct Phf {
     mixer: Mixer,
 }
 
-impl Phf {
+impl UnhashedPhf {
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -251,7 +251,7 @@ impl Buckets {
     /// Attempt to generate a PHF with the given mixer. May fail.
     ///
     /// Hash space must be at least somewhat larger than the number of keys.
-    fn try_generate_phf(&self, mixer: Mixer) -> Option<Phf> {
+    fn try_generate_phf(&self, mixer: Mixer) -> Option<UnhashedPhf> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
         let alloc = self.hash_space + u16::MAX as usize;
         let mut free = vec![u8::MAX; alloc.div_ceil(8)];
@@ -281,7 +281,7 @@ impl Buckets {
 
         let hash_space_with_oob = mixer.get_hash_space_with_oob(self.hash_space, &displacements);
 
-        Some(Phf {
+        Some(UnhashedPhf {
             hash_space: self.hash_space,
             hash_space_with_oob,
             bucket_shift: self.bucket_shift,
@@ -469,7 +469,7 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
 };
 
 #[cfg(feature = "codegen")]
-impl super::codegen::Codegen for Phf {
+impl super::codegen::Codegen for UnhashedPhf {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let unhashed_phf = gen.path("h::low_level::UnhashedPhf");

@@ -1,6 +1,6 @@
 use super::{
     hash::{GenericHasher, ImperfectHasher},
-    unhashed::Phf as UnhashedPhf,
+    unhashed_phf::UnhashedPhf,
 };
 
 /// A perfect hash function.

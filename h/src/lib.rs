@@ -52,7 +52,7 @@ mod map;
 mod phf;
 pub(crate) mod scatter;
 mod set;
-pub(crate) mod unhashed;
+pub(crate) mod unhashed_phf;
 
 pub use map::Map;
 pub use phf::Phf;
@@ -61,7 +61,7 @@ pub use set::Set;
 #[doc(hidden)]
 pub mod low_level {
     pub use super::const_vec::ConstVec;
-    pub use super::unhashed::{Mixer, Phf as UnhashedPhf};
+    pub use super::unhashed_phf::{Mixer, UnhashedPhf};
 }
 
 #[cfg(test)]
