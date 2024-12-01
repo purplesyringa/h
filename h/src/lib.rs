@@ -21,8 +21,9 @@
 //! 2. Built in compile time with macros, such as [`map!`]. Zero-cost in runtime.
 //! 3. Built in `build.rs` with `from_*`, translated to code with [`codegen`] and then `include!`d.
 //!    Zero-cost in runtime and supports programmatic generation, even for non-serializable types.
-//! 4. Built, saved to a file, and then loaded back with [rkyv](https://rkyv.org/). Zero-cost when
-//!    loading. Also consider using this instead of codegen for large data.
+//! 4. Built, saved to a file, and then loaded back with [serde](https://serde.rs/). This requires
+//!    deserialization, but is likely faster than rebuilding from scratch. Also consider using this
+//!    instead of codegen for large data.
 //!
 //!
 //! # Features
@@ -33,7 +34,7 @@
 //! - `build`: Enables `from_*` methods. Necessary for runtime building or programmatic generation
 //!   in `build.rs`.
 //! - `codegen`: Enables [`codegen`]. Necessary for programmatic generation in `build.rs`.
-//! - `rkyv`: Enables [rkyv](https://rkyv.org/)-based serialization/deserialization.
+//! - `serde`: Enables [serde](https://serde.rs/) support.
 
 #![no_std]
 #![cfg_attr(doc, feature(doc_auto_cfg))]

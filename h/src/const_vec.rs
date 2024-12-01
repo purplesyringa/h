@@ -82,3 +82,32 @@ impl<T: super::codegen::Codegen> super::codegen::Codegen for ConstVec<T> {
         }
     }
 }
+
+#[cfg(feature = "serde")]
+mod serde_support {
+    use super::ConstVec;
+    use alloc::vec::Vec;
+    use serde::{
+        ser::{Serialize, SerializeSeq, Serializer},
+        Deserialize, Deserializer,
+    };
+
+    impl<T: Serialize> Serialize for ConstVec<T> {
+        #[inline]
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            let mut seq = serializer.serialize_seq(Some(self.len()))?;
+            for e in &**self {
+                seq.serialize_element(e)?;
+            }
+            seq.end()
+        }
+    }
+
+    #[cfg(feature = "alloc")]
+    impl<'de, T: Deserialize<'de>> Deserialize<'de> for ConstVec<T> {
+        #[inline]
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            Vec::<T>::deserialize(deserializer).map(Into::into)
+        }
+    }
+}

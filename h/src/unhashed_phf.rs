@@ -15,8 +15,20 @@ const _: () = assert!(
 ///
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
+#[allow(
+    clippy::unsafe_derive_deserialize,
+    reason = "safety requirements are validated using TryFrom"
+)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "UnhashedPhfInner"))]
 #[non_exhaustive]
 pub struct UnhashedPhf {
+    inner: UnhashedPhfInner,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct UnhashedPhfInner {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     hash_space: usize,
 
@@ -45,11 +57,13 @@ impl UnhashedPhf {
         mixer: Mixer,
     ) -> Self {
         Self {
-            hash_space,
-            hash_space_with_oob,
-            bucket_shift,
-            displacements: ConstVec::from_static_ref(displacements),
-            mixer,
+            inner: UnhashedPhfInner {
+                hash_space,
+                hash_space_with_oob,
+                bucket_shift,
+                displacements: ConstVec::from_static_ref(displacements),
+                mixer,
+            },
         }
     }
 
@@ -68,13 +82,7 @@ impl UnhashedPhf {
     #[must_use]
     pub fn try_from_keys(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         if keys.is_empty() {
-            return Some(Self {
-                hash_space: 0,
-                hash_space_with_oob: 1,
-                bucket_shift: 63,
-                displacements: ConstVec::from(&[0, 0][..]),
-                mixer: Mixer::Add,
-            });
+            return Some(Self::from_raw_parts(0, 1, 63, &[0, 0], Mixer::Add));
         }
 
         let buckets = Buckets::try_from_keys(keys, hash_space)?;
@@ -93,16 +101,16 @@ impl UnhashedPhf {
     #[inline]
     #[must_use]
     pub fn hash(&self, key: u64) -> usize {
-        let product = multiply_scale(key, self.hash_space);
+        let product = multiply_scale(key, self.inner.hash_space);
         let approx = (product >> 64i32) as u64;
         #[allow(clippy::cast_possible_truncation, reason = "intentional")]
-        let bucket = (product as u64) >> self.bucket_shift;
+        let bucket = (product as u64) >> self.inner.bucket_shift;
         #[allow(
             clippy::cast_possible_truncation,
             reason = "bucket < displacements.len() <= usize::MAX"
         )]
-        let displacement = unsafe { *self.displacements.get_unchecked(bucket as usize) };
-        self.mixer.mix(approx, displacement)
+        let displacement = unsafe { *self.inner.displacements.get_unchecked(bucket as usize) };
+        self.inner.mixer.mix(approx, displacement)
     }
 
     /// Get the boundary on indices.
@@ -112,7 +120,50 @@ impl UnhashedPhf {
     #[inline]
     #[must_use]
     pub const fn capacity(&self) -> usize {
-        self.hash_space_with_oob
+        self.inner.hash_space_with_oob
+    }
+}
+
+#[cfg(feature = "serde")]
+mod serde_support {
+    use super::{UnhashedPhf, UnhashedPhfInner};
+    use thiserror::Error;
+
+    #[derive(Debug, Error)]
+    pub enum Error {
+        #[error("Too large bucket_shift value")]
+        TooLargeBucketShift,
+
+        #[error("Wrong displacement count")]
+        WrongDisplacementCount,
+
+        #[error("Wrong capacity")]
+        WrongCapacity,
+    }
+
+    impl TryFrom<UnhashedPhfInner> for UnhashedPhf {
+        type Error = Error;
+
+        #[inline]
+        fn try_from(inner: UnhashedPhfInner) -> Result<Self, Error> {
+            if inner.bucket_shift >= 64 {
+                return Err(Error::TooLargeBucketShift);
+            }
+
+            let bucket_count = 1 << (64 - inner.bucket_shift);
+            if bucket_count != inner.displacements.len() as u64 {
+                return Err(Error::WrongDisplacementCount);
+            }
+
+            let expected_hash_space_with_oob = inner
+                .mixer
+                .get_hash_space_with_oob(inner.hash_space, &inner.displacements);
+            if inner.hash_space_with_oob != expected_hash_space_with_oob {
+                return Err(Error::WrongCapacity);
+            }
+
+            Ok(Self { inner })
+        }
     }
 }
 
@@ -282,11 +333,13 @@ impl Buckets {
         let hash_space_with_oob = mixer.get_hash_space_with_oob(self.hash_space, &displacements);
 
         Some(UnhashedPhf {
-            hash_space: self.hash_space,
-            hash_space_with_oob,
-            bucket_shift: self.bucket_shift,
-            displacements: displacements.into(),
-            mixer,
+            inner: UnhashedPhfInner {
+                hash_space: self.hash_space,
+                hash_space_with_oob,
+                bucket_shift: self.bucket_shift,
+                displacements: displacements.into(),
+                mixer,
+            },
         })
     }
 }
@@ -297,6 +350,8 @@ const fn multiply_scale(a: u64, b: usize) -> u128 {
 
 /// Algorithm for mixing displacement with the approximate position
 #[derive(Copy, Clone, Debug)]
+#[allow(clippy::unsafe_derive_deserialize, reason = "plain old data")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 #[doc(hidden)]
 pub enum Mixer {
@@ -473,11 +528,11 @@ impl super::codegen::Codegen for UnhashedPhf {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let unhashed_phf = gen.path("h::low_level::UnhashedPhf");
-        let hash_space = gen.piece(&self.hash_space);
-        let hash_space_with_oob = gen.piece(&self.hash_space_with_oob);
-        let bucket_shift = gen.piece(&self.bucket_shift);
-        let displacements = gen.piece(&&*self.displacements);
-        let mixer = gen.piece(&self.mixer);
+        let hash_space = gen.piece(&self.inner.hash_space);
+        let hash_space_with_oob = gen.piece(&self.inner.hash_space_with_oob);
+        let bucket_shift = gen.piece(&self.inner.bucket_shift);
+        let displacements = gen.piece(&&*self.inner.displacements);
+        let mixer = gen.piece(&self.inner.mixer);
         quote::quote!(
             #unhashed_phf::from_raw_parts(
                 #hash_space,

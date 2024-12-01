@@ -8,6 +8,7 @@ use super::{
 /// A mapping from `T` to numbers from `0` to `N - 1`, injective over the training key set. `N`
 /// might be larger than the size of the training key set.
 #[non_exhaustive]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Phf<T, H: ImperfectHasher<T> = GenericHasher> {
     hash_instance: H::Instance,
     unhashed_phf: UnhashedPhf,

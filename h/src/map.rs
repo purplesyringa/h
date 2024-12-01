@@ -6,8 +6,29 @@ use super::{
 use core::borrow::Borrow;
 
 /// A perfect hash map.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "MapInner<K, V, H>"))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "K: serde::Serialize, V: serde::Serialize, H::Instance: serde::Serialize",
+        deserialize = "K: serde::Deserialize<'de>, V: serde::Deserialize<'de>, H::Instance: serde::Deserialize<'de>"
+    ))
+)]
 #[non_exhaustive]
 pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher> {
+    inner: MapInner<K, V, H>,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "K: serde::Serialize, V: serde::Serialize, H::Instance: serde::Serialize",
+        deserialize = "K: serde::Deserialize<'de>, V: serde::Deserialize<'de>, H::Instance: serde::Deserialize<'de>"
+    ))
+)]
+struct MapInner<K, V, H: ImperfectHasher<K>> {
     phf: Phf<K, H>,
     data: ConstVec<Option<(K, V)>>,
     len: usize,
@@ -22,7 +43,9 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
         data: ConstVec<Option<(K, V)>>,
         len: usize,
     ) -> Self {
-        Self { phf, data, len }
+        Self {
+            inner: MapInner { phf, data, len },
+        }
     }
 
     /// Try to generate a perfect hash map.
@@ -39,11 +62,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
         let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
         super::scatter::scatter(entries, |(key, _)| phf.hash(key), &mut data);
-        Some(Self {
-            phf,
-            data: data.into(),
-            len,
-        })
+        Some(Self::from_raw_parts(phf, data.into(), len))
     }
 
     /// Generate a perfect hash map.
@@ -69,7 +88,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
         Q: ?Sized + Eq,
         H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
     {
-        unsafe { self.data.get_unchecked(self.phf.hash(key)) }
+        unsafe { self.inner.data.get_unchecked(self.inner.phf.hash(key)) }
             .as_ref()
             .filter(|(k, _)| k.borrow() == key)
             .map(|(k, v)| (k, v))
@@ -83,7 +102,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
         Q: ?Sized + Eq,
         H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
     {
-        unsafe { self.data.get_unchecked_mut(self.phf.hash(key)) }
+        unsafe { self.inner.data.get_unchecked_mut(self.inner.phf.hash(key)) }
             .as_mut()
             .filter(|(k, _)| k.borrow() == key)
             .map(|(k, v)| (k as &K, v))
@@ -125,13 +144,13 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     /// Get number of entries.
     #[inline]
     pub const fn len(&self) -> usize {
-        self.len
+        self.inner.len
     }
 
     /// Check if the hashmap is empty.
     #[inline]
     pub const fn is_empty(&self) -> bool {
-        self.len == 0
+        self.len() == 0
     }
 
     /// Iterate through elements.
@@ -139,7 +158,8 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     /// The iteration order is unspecified, but is constant for a given map.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
-        self.data
+        self.inner
+            .data
             .iter()
             .filter_map(|pair| pair.as_ref().map(|(k, v)| (k, v)))
     }
@@ -149,7 +169,8 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     /// The iteration order is unspecified, but is constant for a given map.
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut V)> {
-        self.data
+        self.inner
+            .data
             .iter_mut()
             .filter_map(|pair| pair.as_mut().map(|(k, v)| (k as &K, v)))
     }
@@ -179,6 +200,37 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     }
 }
 
+#[cfg(feature = "serde")]
+mod serde_support {
+    use super::*;
+    use thiserror::Error;
+
+    #[derive(Debug, Error)]
+    pub enum Error {
+        #[error("Wrong data length")]
+        WrongDataLength,
+
+        #[error("Wrong len")]
+        WrongLen,
+    }
+
+    impl<K, V, H: ImperfectHasher<K>> TryFrom<MapInner<K, V, H>> for Map<K, V, H> {
+        type Error = Error;
+
+        fn try_from(inner: MapInner<K, V, H>) -> Result<Self, Error> {
+            if inner.data.len() != inner.phf.capacity() {
+                return Err(Error::WrongDataLength);
+            }
+
+            if inner.len != inner.data.iter().filter(|opt| opt.is_some()).count() {
+                return Err(Error::WrongLen);
+            }
+
+            Ok(Self { inner })
+        }
+    }
+}
+
 #[cfg(feature = "codegen")]
 impl<K, V, H: ImperfectHasher<K>> crate::codegen::Codegen for Map<K, V, H>
 where
@@ -189,9 +241,9 @@ where
     #[inline]
     fn generate_piece(&self, gen: &mut crate::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let map = gen.path("h::Map");
-        let phf = gen.piece(&self.phf);
-        let data = gen.piece(&self.data);
-        let len = gen.piece(&self.len);
+        let phf = gen.piece(&self.inner.phf);
+        let data = gen.piece(&self.inner.data);
+        let len = gen.piece(&self.inner.len);
         quote::quote!(#map::from_raw_parts(#phf, #data, #len))
     }
 }
