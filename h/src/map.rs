@@ -23,6 +23,7 @@ struct MapInner<K, V, H> {
     len: usize,
 }
 
+#[cfg(feature = "build")]
 impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     /// Try to generate a perfect hash map.
     ///
@@ -30,7 +31,6 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     ///
     /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
-    #[cfg(feature = "build")]
     #[inline] // heavy, but monomorphized anyway
     #[must_use]
     pub fn try_from_entries(entries: alloc::vec::Vec<(K, V)>) -> Option<Self> {
@@ -49,7 +49,6 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     ///
     /// Panics if the underlying imperfect hash function family is finite and generation didn't
     /// succeed.
-    #[cfg(feature = "build")]
     #[inline]
     #[must_use]
     pub fn from_entries(entries: alloc::vec::Vec<(K, V)>) -> Self {

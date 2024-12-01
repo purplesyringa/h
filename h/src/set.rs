@@ -23,6 +23,7 @@ struct SetInner<T, H> {
     len: usize,
 }
 
+#[cfg(feature = "build")]
 impl<T, H: ImperfectHasher<T>> Set<T, H> {
     /// Try to generate a perfect hash set.
     ///
@@ -30,7 +31,6 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     ///
     /// Generation is not guaranteed to succeed for bad or small hash families. `None` is returned
     /// in this case. For infinite hash families, this function either hangs or returns `Some`.
-    #[cfg(feature = "build")]
     #[inline] // heavy, but monomorphized anyway
     #[must_use]
     pub fn try_from_elements(elements: alloc::vec::Vec<T>) -> Option<Self> {
@@ -49,7 +49,6 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     ///
     /// Panics if the underlying imperfect hash function family is finite and generation didn't
     /// succeed.
-    #[cfg(feature = "build")]
     #[inline]
     #[must_use]
     pub fn from_elements(elements: alloc::vec::Vec<T>) -> Self {

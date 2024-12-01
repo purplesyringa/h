@@ -16,6 +16,7 @@ pub struct Phf<T, H = GenericHasher> {
     _marker: PhantomData<fn() -> T>,
 }
 
+#[cfg(feature = "build")]
 impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     /// Try to generate a perfect hash function.
     ///
@@ -28,7 +29,6 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     /// # Panics
     ///
     /// Panics if `keys` contains more than `isize::MAX / 2` elements.
-    #[cfg(feature = "build")]
     #[inline]
     #[allow(
         clippy::needless_pass_by_value,
@@ -77,7 +77,6 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     ///
     /// Panics if `keys` contains more than `isize::MAX / 2` elements, or if the underlying
     /// imperfect hash function family is finite and generation didn't succeed.
-    #[cfg(feature = "build")]
     #[inline]
     #[allow(
         clippy::needless_pass_by_value,
