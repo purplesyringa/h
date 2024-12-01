@@ -98,7 +98,7 @@ impl CodeGenerator {
 
     /// Check if generating code for a mutable context.
     ///
-    /// See the documentation for [`set_mutability`] for an explanation.
+    /// See the documentation for [`set_mutability`](Self::set_mutability) for an explanation.
     #[inline]
     #[must_use]
     pub const fn mutability(&self) -> bool {
