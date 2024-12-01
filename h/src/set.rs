@@ -6,8 +6,19 @@ use super::{
 use core::borrow::Borrow;
 
 /// A perfect hash set.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "SetInner<T, H>"))]
+#[allow(
+    clippy::unsafe_derive_deserialize,
+    reason = "safety requirements are validated using TryFrom"
+)]
 #[non_exhaustive]
 pub struct Set<T, H: ImperfectHasher<T> = GenericHasher> {
+    inner: SetInner<T, H>,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct SetInner<T, H: ImperfectHasher<T>> {
     phf: Phf<T, H>,
     data: ConstVec<Option<T>>,
     len: usize,
@@ -18,7 +29,9 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     #[inline]
     #[must_use]
     pub const fn from_raw_parts(phf: Phf<T, H>, data: ConstVec<Option<T>>, len: usize) -> Self {
-        Self { phf, data, len }
+        Self {
+            inner: SetInner { phf, data, len },
+        }
     }
 
     /// Try to generate a perfect hash set.
@@ -35,11 +48,7 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
         let phf = Phf::try_from_keys(elements.iter())?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
         super::scatter::scatter(elements, |element| phf.hash(element), &mut data);
-        Some(Self {
-            phf,
-            data: data.into(),
-            len,
-        })
+        Some(Self::from_raw_parts(phf, data.into(), len))
     }
 
     /// Generate a perfect hash set.
@@ -65,7 +74,7 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
         Q: ?Sized + Eq,
         H: ImperfectHasher<Q>,
     {
-        unsafe { self.data.get_unchecked(self.phf.hash(value)) }
+        unsafe { self.inner.data.get_unchecked(self.inner.phf.hash(value)) }
             .as_ref()
             .filter(|&elem| elem.borrow() == value)
     }
@@ -84,13 +93,13 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     /// Get number of entries.
     #[inline]
     pub const fn len(&self) -> usize {
-        self.len
+        self.inner.len
     }
 
     /// Check if the hashset is empty.
     #[inline]
     pub const fn is_empty(&self) -> bool {
-        self.len == 0
+        self.len() == 0
     }
 
     /// Iterate through elements.
@@ -98,7 +107,39 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     /// The iteration order is unspecified, but is constant for a given set.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.data.iter().filter_map(|opt| opt.as_ref())
+        self.inner.data.iter().filter_map(|opt| opt.as_ref())
+    }
+}
+
+#[cfg(feature = "serde")]
+mod serde_support {
+    use super::{ImperfectHasher, Set, SetInner};
+    use thiserror::Error;
+
+    #[derive(Debug, Error)]
+    pub enum Error {
+        #[error("Wrong data length")]
+        WrongDataLength,
+
+        #[error("Wrong len")]
+        WrongLen,
+    }
+
+    impl<T, H: ImperfectHasher<T>> TryFrom<SetInner<T, H>> for Set<T, H> {
+        type Error = Error;
+
+        #[inline]
+        fn try_from(inner: SetInner<T, H>) -> Result<Self, Error> {
+            if inner.data.len() != inner.phf.capacity() {
+                return Err(Error::WrongDataLength);
+            }
+
+            if inner.len != inner.data.iter().filter(|opt| opt.is_some()).count() {
+                return Err(Error::WrongLen);
+            }
+
+            Ok(Self { inner })
+        }
     }
 }
 
@@ -111,9 +152,9 @@ where
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let set = gen.path("h::Set");
-        let phf = gen.piece(&self.phf);
-        let data = gen.piece(&self.data);
-        let len = gen.piece(&self.len);
+        let phf = gen.piece(&self.inner.phf);
+        let data = gen.piece(&self.inner.data);
+        let len = gen.piece(&self.inner.len);
         quote::quote!(#set::from_raw_parts(#phf, #data, #len))
     }
 }
