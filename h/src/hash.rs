@@ -25,12 +25,9 @@ use rapidhash::RapidRng;
 ///
 /// In addition, if `ImperfectHasher<T>` and `ImperfectHasher<U>` are implemented for one type and
 /// `T: Borrow<U>`, the hashes must be equal between `x` and `x.borrow()`.
-pub trait ImperfectHasher<T: ?Sized> {
-    /// Type of instance of the hash function. Usually just a seed.
-    type Instance: Clone + fmt::Debug;
-
+pub trait ImperfectHasher<T: ?Sized>: Clone + fmt::Debug {
     /// Hash a key.
-    fn hash(instance: &Self::Instance, key: &T) -> u64;
+    fn hash(&self, key: &T) -> u64;
 
     /// Iterate through the hash family.
     ///
@@ -38,7 +35,7 @@ pub trait ImperfectHasher<T: ?Sized> {
     /// different instances of the hash, or infinite.
     ///
     /// Generation is deterministic, ensuring rebuilding is a no-op.
-    fn iter() -> impl Iterator<Item = Self::Instance>;
+    fn iter() -> impl Iterator<Item = Self>;
 }
 
 /// Generic imperfect hasher.
@@ -49,8 +46,20 @@ pub trait ImperfectHasher<T: ?Sized> {
 /// Might be slower than necessary on structured data -- implement [`ImperfectHasher`] yourself if
 /// this matters.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
-pub struct GenericHasher;
+pub struct GenericHasher {
+    low: u64,
+    high: u64,
+}
+
+impl GenericHasher {
+    #[doc(hidden)]
+    #[inline]
+    pub const fn from_raw_parts(low: u64, high: u64) -> Self {
+        Self { low, high }
+    }
+}
 
 /// Implementation details of the generic hasher.
 ///
@@ -60,42 +69,43 @@ pub struct GenericHasher;
 /// for a given version of the crate.
 ///
 /// For integers up to 64 bits long and `bool`, the hash is computed as
-/// `(key as u64).wrapping_mul(instance.0)`. This means that the hash value is invariant under
+/// `(key as u64).wrapping_mul(self.low)`. This means that the hash value is invariant under
 /// extending the length of the integer type up to 64 bits.
 ///
-/// For 128-bit integers, `low.wrapping_mul(instance.0) ^ high.wrapping_mul(instance.1)` is
-/// computed, where `low` and `high` are the low and the high 64 bits of the key.
+/// For 128-bit integers, `low.wrapping_mul(self.low) ^ high.wrapping_mul(self.high)` is computed,
+/// where `low` and `high` are the low and the high 64 bits of the key.
 ///
-/// For other types, rapidhash is applied to the output of [`PortableHash`], with `instance.0` used
-/// as the seed.
+/// For other types, rapidhash is applied to the output of [`PortableHash`], with `self.low` used as
+/// the seed.
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
-    type Instance = (u64, u64);
-
     #[inline]
-    fn hash(instance: &Self::Instance, key: &T) -> u64 {
+    fn hash(&self, key: &T) -> u64 {
         #[allow(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
             reason = "intentional"
         )]
         if let Some(x) = reinterpret_scalar_up_to_64bit(key) {
-            x.wrapping_mul(instance.0)
+            x.wrapping_mul(self.low)
         } else if let Some(&x) = unsafe { reinterpret_scalar::<_, u128>(key) } {
-            (x as u64).wrapping_mul(instance.0) ^ ((x >> 64i32) as u64).wrapping_mul(instance.1)
+            (x as u64).wrapping_mul(self.low) ^ ((x >> 64i32) as u64).wrapping_mul(self.high)
         } else if let Some(&x) = unsafe { reinterpret_scalar::<_, i128>(key) } {
-            (x as u64).wrapping_mul(instance.0) ^ ((x >> 64i32) as u64).wrapping_mul(instance.1)
+            (x as u64).wrapping_mul(self.low) ^ ((x >> 64i32) as u64).wrapping_mul(self.high)
         } else {
-            let mut state = rapidhash::RapidHasher::new(instance.0);
+            let mut state = rapidhash::RapidHasher::new(self.low);
             key.hash(&mut state);
             state.finish()
         }
     }
 
     #[inline]
-    fn iter() -> impl Iterator<Item = Self::Instance> {
+    fn iter() -> impl Iterator<Item = Self> {
         // Hexadecimal digits of pi - 3
         let mut rng = RapidRng::new(0x243f_6a88_85a3_08d3);
-        core::iter::repeat_with(move || (rng.next(), rng.next()))
+        core::iter::repeat_with(move || Self {
+            low: rng.next(),
+            high: rng.next(),
+        })
     }
 }
 
@@ -240,4 +250,15 @@ fn reinterpret_scalar_up_to_64bit<T: ?Sized>(x: &T) -> Option<u64> {
     }
     imp!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, bool);
     None
+}
+
+#[cfg(feature = "codegen")]
+impl super::codegen::Codegen for GenericHasher {
+    #[inline]
+    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
+        let generic_hasher = gen.path("h::hash::GenericHasher");
+        let low = gen.piece(&self.low);
+        let high = gen.piece(&self.high);
+        quote::quote!(#generic_hasher::from_raw_parts(#low, #high))
+    }
 }

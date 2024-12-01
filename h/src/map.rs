@@ -8,26 +8,12 @@ use core::borrow::Borrow;
 /// A perfect hash map.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "MapInner<K, V, H>"))]
-#[cfg_attr(
-    feature = "serde",
-    serde(bound(
-        serialize = "K: serde::Serialize, V: serde::Serialize, H::Instance: serde::Serialize",
-        deserialize = "K: serde::Deserialize<'de>, V: serde::Deserialize<'de>, H::Instance: serde::Deserialize<'de>"
-    ))
-)]
 #[non_exhaustive]
 pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher> {
     inner: MapInner<K, V, H>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "serde",
-    serde(bound(
-        serialize = "K: serde::Serialize, V: serde::Serialize, H::Instance: serde::Serialize",
-        deserialize = "K: serde::Deserialize<'de>, V: serde::Deserialize<'de>, H::Instance: serde::Deserialize<'de>"
-    ))
-)]
 struct MapInner<K, V, H: ImperfectHasher<K>> {
     phf: Phf<K, H>,
     data: ConstVec<Option<(K, V)>>,
@@ -86,7 +72,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     where
         K: Borrow<Q>,
         Q: ?Sized + Eq,
-        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
+        H: ImperfectHasher<Q>,
     {
         unsafe { self.inner.data.get_unchecked(self.inner.phf.hash(key)) }
             .as_ref()
@@ -100,7 +86,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     where
         K: Borrow<Q>,
         Q: ?Sized + Eq,
-        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
+        H: ImperfectHasher<Q>,
     {
         unsafe { self.inner.data.get_unchecked_mut(self.inner.phf.hash(key)) }
             .as_mut()
@@ -114,7 +100,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     where
         K: Borrow<Q>,
         Q: ?Sized + Eq,
-        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
+        H: ImperfectHasher<Q>,
     {
         self.get_key_value(key).map(|(_, v)| v)
     }
@@ -125,7 +111,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     where
         K: Borrow<Q>,
         Q: ?Sized + Eq,
-        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
+        H: ImperfectHasher<Q>,
     {
         self.get_key_value_mut(key).map(|(_, v)| v)
     }
@@ -136,7 +122,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     where
         K: Borrow<Q>,
         Q: ?Sized + Eq,
-        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<K>>::Instance>,
+        H: ImperfectHasher<Q>,
     {
         self.get_key_value(key).is_some()
     }

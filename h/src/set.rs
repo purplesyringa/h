@@ -63,7 +63,7 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     where
         T: Borrow<Q>,
         Q: ?Sized + Eq,
-        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<T>>::Instance>,
+        H: ImperfectHasher<Q>,
     {
         unsafe { self.data.get_unchecked(self.phf.hash(value)) }
             .as_ref()
@@ -76,7 +76,7 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     where
         T: Borrow<Q>,
         Q: ?Sized + Eq,
-        H: ImperfectHasher<Q, Instance = <H as ImperfectHasher<T>>::Instance>,
+        H: ImperfectHasher<Q>,
     {
         self.get(value).is_some()
     }

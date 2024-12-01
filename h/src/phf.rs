@@ -2,6 +2,7 @@ use super::{
     hash::{GenericHasher, ImperfectHasher},
     unhashed_phf::UnhashedPhf,
 };
+use core::marker::PhantomData;
 
 /// A perfect hash function.
 ///
@@ -10,18 +11,20 @@ use super::{
 #[non_exhaustive]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Phf<T, H: ImperfectHasher<T> = GenericHasher> {
-    hash_instance: H::Instance,
+    hash: H,
     unhashed_phf: UnhashedPhf,
+    _marker: PhantomData<fn() -> T>,
 }
 
 impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(hash_instance: H::Instance, unhashed_phf: UnhashedPhf) -> Self {
+    pub const fn from_raw_parts(hash: H, unhashed_phf: UnhashedPhf) -> Self {
         Self {
-            hash_instance,
+            hash,
             unhashed_phf,
+            _marker: PhantomData,
         }
     }
 
@@ -61,17 +64,12 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
 
         // Increase hash_space exponentially by 1.01 on each iteration until reaching a power of two
         // size. For good hashes, this loop should terminate soon.
-        for hash_instance in H::iter() {
+        for hash in H::iter() {
             if let Some(unhashed_phf) = UnhashedPhf::try_from_keys(
-                keys.clone()
-                    .map(|key| H::hash(&hash_instance, key))
-                    .collect(),
+                keys.clone().map(|key| hash.hash(key)).collect(),
                 hash_space,
             ) {
-                return Some(Self {
-                    hash_instance,
-                    unhashed_phf,
-                });
+                return Some(Self::from_raw_parts(hash, unhashed_phf));
             }
             // Both increase the hash space and change the hash function. This is especially
             // important for infinite families, which wouldn't progress otherwise.
@@ -112,9 +110,9 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     #[inline]
     pub fn hash<U: ?Sized>(&self, key: &U) -> usize
     where
-        H: ImperfectHasher<U, Instance = <H as ImperfectHasher<T>>::Instance>,
+        H: ImperfectHasher<U>,
     {
-        self.unhashed_phf.hash(H::hash(&self.hash_instance, key))
+        self.unhashed_phf.hash(self.hash.hash(key))
     }
 
     /// Get the boundary on indices.
@@ -130,15 +128,12 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Phf<T, H>
-where
-    H::Instance: super::codegen::Codegen,
-{
+impl<T, H: ImperfectHasher<T> + super::codegen::Codegen> super::codegen::Codegen for Phf<T, H> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let phf = gen.path("h::Phf");
-        let hash_instance = gen.piece(&self.hash_instance);
+        let hash = gen.piece(&self.hash);
         let unhashed_phf = gen.piece(&self.unhashed_phf);
-        quote::quote!(#phf::from_raw_parts(#hash_instance, #unhashed_phf))
+        quote::quote!(#phf::from_raw_parts(#hash, #unhashed_phf))
     }
 }
