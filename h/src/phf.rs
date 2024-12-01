@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 pub struct Phf<T, H = GenericHasher> {
     hash: H,
     unhashed_phf: UnhashedPhf,
-    _marker: PhantomData<fn() -> T>,
+    _marker: PhantomData<fn(T)>,
 }
 
 #[cfg(feature = "build")]
