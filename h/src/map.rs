@@ -8,6 +8,10 @@ use core::borrow::Borrow;
 /// A perfect hash map.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "MapInner<K, V, H>"))]
+#[allow(
+    clippy::unsafe_derive_deserialize,
+    reason = "safety requirements are validated using TryFrom"
+)]
 #[non_exhaustive]
 pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher> {
     inner: MapInner<K, V, H>,
@@ -188,7 +192,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
 
 #[cfg(feature = "serde")]
 mod serde_support {
-    use super::*;
+    use super::{ImperfectHasher, Map, MapInner};
     use thiserror::Error;
 
     #[derive(Debug, Error)]
@@ -203,6 +207,7 @@ mod serde_support {
     impl<K, V, H: ImperfectHasher<K>> TryFrom<MapInner<K, V, H>> for Map<K, V, H> {
         type Error = Error;
 
+        #[inline]
         fn try_from(inner: MapInner<K, V, H>) -> Result<Self, Error> {
             if inner.data.len() != inner.phf.capacity() {
                 return Err(Error::WrongDataLength);

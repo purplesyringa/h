@@ -56,6 +56,7 @@ pub struct GenericHasher {
 impl GenericHasher {
     #[doc(hidden)]
     #[inline]
+    #[must_use]
     pub const fn from_raw_parts(low: u64, high: u64) -> Self {
         Self { low, high }
     }
