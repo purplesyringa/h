@@ -19,8 +19,9 @@
 //! 1. Built in runtime by calling `from_*` methods. (This is slow, so profile against
 //!    [`HashMap`](std::collections::HashMap).)
 //! 2. Built in compile time with macros, such as [`map!`]. Zero-cost in runtime.
-//! 3. Built in `build.rs` with `from_*`, translated to code with [`codegen`] and then `include!`d.
-//!    Zero-cost in runtime and supports programmatic generation, even for non-serializable types.
+//! 3. Built in `build.rs` with `from_*`, translated to code with [`codegen`] and then
+//!    [`include!`]d. Zero-cost in runtime and supports programmatic generation, even for
+//!    non-serializable types.
 //! 4. Built, saved to a file, and then loaded back with [serde](https://serde.rs/). This requires
 //!    deserialization, but is likely faster than rebuilding from scratch. Also consider using this
 //!    instead of codegen for large data.
