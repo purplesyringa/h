@@ -2,6 +2,7 @@ use super::{
     hash::{GenericHasher, ImperfectHasher},
     unhashed_phf::UnhashedPhf,
 };
+use core::borrow::Borrow;
 use core::marker::PhantomData;
 
 /// A perfect hash function.
@@ -9,24 +10,13 @@ use core::marker::PhantomData;
 /// A mapping from `T` to numbers from `0` to `N - 1`, injective over the training key set. `N`
 /// might be larger than the size of the training key set.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Phf<T, H: ImperfectHasher<T> = GenericHasher> {
+pub struct Phf<T, H = GenericHasher> {
     hash: H,
     unhashed_phf: UnhashedPhf,
     _marker: PhantomData<fn() -> T>,
 }
 
 impl<T, H: ImperfectHasher<T>> Phf<T, H> {
-    #[doc(hidden)]
-    #[inline]
-    #[must_use]
-    pub const fn from_raw_parts(hash: H, unhashed_phf: UnhashedPhf) -> Self {
-        Self {
-            hash,
-            unhashed_phf,
-            _marker: PhantomData,
-        }
-    }
-
     /// Try to generate a perfect hash function.
     ///
     /// `keys` must not contain duplicates. It's an exact-size cloneable iterator rather than
@@ -99,6 +89,19 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     {
         Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
     }
+}
+
+impl<T, H> Phf<T, H> {
+    #[doc(hidden)]
+    #[inline]
+    #[must_use]
+    pub const fn from_raw_parts(hash: H, unhashed_phf: UnhashedPhf) -> Self {
+        Self {
+            hash,
+            unhashed_phf,
+            _marker: PhantomData,
+        }
+    }
 
     /// Hash a key.
     ///
@@ -109,6 +112,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     #[inline]
     pub fn hash<U: ?Sized>(&self, key: &U) -> usize
     where
+        T: Borrow<U>,
         H: ImperfectHasher<U>,
     {
         self.unhashed_phf.hash(self.hash.hash(key))
@@ -127,7 +131,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<T, H: ImperfectHasher<T> + super::codegen::Codegen> super::codegen::Codegen for Phf<T, H> {
+impl<T, H: super::codegen::Codegen> super::codegen::Codegen for Phf<T, H> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let phf = gen.path("h::Phf");

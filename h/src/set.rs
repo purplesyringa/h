@@ -12,27 +12,18 @@ use core::borrow::Borrow;
     clippy::unsafe_derive_deserialize,
     reason = "safety requirements are validated using TryFrom"
 )]
-pub struct Set<T, H: ImperfectHasher<T> = GenericHasher> {
+pub struct Set<T, H = GenericHasher> {
     inner: SetInner<T, H>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-struct SetInner<T, H: ImperfectHasher<T>> {
+struct SetInner<T, H> {
     phf: Phf<T, H>,
     data: ConstVec<Option<T>>,
     len: usize,
 }
 
 impl<T, H: ImperfectHasher<T>> Set<T, H> {
-    #[doc(hidden)]
-    #[inline]
-    #[must_use]
-    pub const fn from_raw_parts(phf: Phf<T, H>, data: ConstVec<Option<T>>, len: usize) -> Self {
-        Self {
-            inner: SetInner { phf, data, len },
-        }
-    }
-
     /// Try to generate a perfect hash set.
     ///
     /// There must not be duplicate elements in the input.
@@ -63,6 +54,17 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     #[must_use]
     pub fn from_elements(elements: alloc::vec::Vec<T>) -> Self {
         Self::try_from_elements(elements).expect("ran out of imperfect hash family instances")
+    }
+}
+
+impl<T, H> Set<T, H> {
+    #[doc(hidden)]
+    #[inline]
+    #[must_use]
+    pub const fn from_raw_parts(phf: Phf<T, H>, data: ConstVec<Option<T>>, len: usize) -> Self {
+        Self {
+            inner: SetInner { phf, data, len },
+        }
     }
 
     /// Get a reference to the element if present.
@@ -112,7 +114,7 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
 
 #[cfg(feature = "serde")]
 mod serde_support {
-    use super::{ImperfectHasher, Set, SetInner};
+    use super::{Set, SetInner};
     use thiserror::Error;
 
     #[derive(Debug, Error)]
@@ -124,7 +126,7 @@ mod serde_support {
         WrongLen,
     }
 
-    impl<T, H: ImperfectHasher<T>> TryFrom<SetInner<T, H>> for Set<T, H> {
+    impl<T, H> TryFrom<SetInner<T, H>> for Set<T, H> {
         type Error = Error;
 
         #[inline]
@@ -143,11 +145,7 @@ mod serde_support {
 }
 
 #[cfg(feature = "codegen")]
-impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Set<T, H>
-where
-    T: super::codegen::Codegen,
-    H: super::codegen::Codegen,
-{
+impl<T: super::codegen::Codegen, H: super::codegen::Codegen> super::codegen::Codegen for Set<T, H> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let set = gen.path("h::Set");

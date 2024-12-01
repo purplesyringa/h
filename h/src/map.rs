@@ -12,31 +12,18 @@ use core::borrow::Borrow;
     clippy::unsafe_derive_deserialize,
     reason = "safety requirements are validated using TryFrom"
 )]
-pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher> {
+pub struct Map<K, V, H = GenericHasher> {
     inner: MapInner<K, V, H>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-struct MapInner<K, V, H: ImperfectHasher<K>> {
+struct MapInner<K, V, H> {
     phf: Phf<K, H>,
     data: ConstVec<Option<(K, V)>>,
     len: usize,
 }
 
 impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
-    #[doc(hidden)]
-    #[inline]
-    #[must_use]
-    pub const fn from_raw_parts(
-        phf: Phf<K, H>,
-        data: ConstVec<Option<(K, V)>>,
-        len: usize,
-    ) -> Self {
-        Self {
-            inner: MapInner { phf, data, len },
-        }
-    }
-
     /// Try to generate a perfect hash map.
     ///
     /// There must not be duplicate keys in the input.
@@ -67,6 +54,21 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     #[must_use]
     pub fn from_entries(entries: alloc::vec::Vec<(K, V)>) -> Self {
         Self::try_from_entries(entries).expect("ran out of imperfect hash family instances")
+    }
+}
+
+impl<K, V, H> Map<K, V, H> {
+    #[doc(hidden)]
+    #[inline]
+    #[must_use]
+    pub const fn from_raw_parts(
+        phf: Phf<K, H>,
+        data: ConstVec<Option<(K, V)>>,
+        len: usize,
+    ) -> Self {
+        Self {
+            inner: MapInner { phf, data, len },
+        }
     }
 
     /// Get a key-value pair by key.
@@ -191,7 +193,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
 
 #[cfg(feature = "serde")]
 mod serde_support {
-    use super::{ImperfectHasher, Map, MapInner};
+    use super::{Map, MapInner};
     use thiserror::Error;
 
     #[derive(Debug, Error)]
@@ -203,7 +205,7 @@ mod serde_support {
         WrongLen,
     }
 
-    impl<K, V, H: ImperfectHasher<K>> TryFrom<MapInner<K, V, H>> for Map<K, V, H> {
+    impl<K, V, H> TryFrom<MapInner<K, V, H>> for Map<K, V, H> {
         type Error = Error;
 
         #[inline]
@@ -222,11 +224,8 @@ mod serde_support {
 }
 
 #[cfg(feature = "codegen")]
-impl<K, V, H: ImperfectHasher<K>> super::codegen::Codegen for Map<K, V, H>
-where
-    K: super::codegen::Codegen,
-    V: super::codegen::Codegen,
-    H: super::codegen::Codegen,
+impl<K: super::codegen::Codegen, V: super::codegen::Codegen, H: super::codegen::Codegen>
+    super::codegen::Codegen for Map<K, V, H>
 {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
