@@ -21,7 +21,6 @@ const _: () = assert!(
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "UnhashedPhfInner"))]
-#[non_exhaustive]
 pub struct UnhashedPhf {
     inner: UnhashedPhfInner,
 }

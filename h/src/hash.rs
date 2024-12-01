@@ -47,7 +47,6 @@ pub trait ImperfectHasher<T: ?Sized>: Clone + fmt::Debug {
 /// this matters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 pub struct GenericHasher {
     low: u64,
     high: u64,

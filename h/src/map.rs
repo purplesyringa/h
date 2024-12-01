@@ -12,7 +12,6 @@ use core::borrow::Borrow;
     clippy::unsafe_derive_deserialize,
     reason = "safety requirements are validated using TryFrom"
 )]
-#[non_exhaustive]
 pub struct Map<K, V, H: ImperfectHasher<K> = GenericHasher> {
     inner: MapInner<K, V, H>,
 }

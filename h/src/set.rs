@@ -12,7 +12,6 @@ use core::borrow::Borrow;
     clippy::unsafe_derive_deserialize,
     reason = "safety requirements are validated using TryFrom"
 )]
-#[non_exhaustive]
 pub struct Set<T, H: ImperfectHasher<T> = GenericHasher> {
     inner: SetInner<T, H>,
 }
