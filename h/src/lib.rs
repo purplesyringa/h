@@ -30,7 +30,7 @@
 //!
 //! - `std` (default): Whether `std` is available. Isn't currently used for much except tests.
 //! - `alloc` (default): Whether `alloc` is available. Enables implementations of certain traits for
-//!   types from `alloc`, such as `String`.
+//!   types from `alloc`, such as [`String`](alloc::string::String) and [`Vec`](alloc::vec::Vec).
 //! - `build`: Enables `from_*` methods. Necessary for runtime building or programmatic generation
 //!   in `build.rs`.
 //! - `codegen`: Enables [`codegen`]. Necessary for programmatic generation in `build.rs`.

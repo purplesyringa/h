@@ -146,8 +146,8 @@ mod serde_support {
 #[cfg(feature = "codegen")]
 impl<T, H: ImperfectHasher<T>> super::codegen::Codegen for Set<T, H>
 where
-    Phf<T, H>: super::codegen::Codegen,
     T: super::codegen::Codegen,
+    H: super::codegen::Codegen,
 {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {

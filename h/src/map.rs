@@ -223,14 +223,14 @@ mod serde_support {
 }
 
 #[cfg(feature = "codegen")]
-impl<K, V, H: ImperfectHasher<K>> crate::codegen::Codegen for Map<K, V, H>
+impl<K, V, H: ImperfectHasher<K>> super::codegen::Codegen for Map<K, V, H>
 where
-    Phf<K, H>: crate::codegen::Codegen,
-    K: crate::codegen::Codegen,
-    V: crate::codegen::Codegen,
+    K: super::codegen::Codegen,
+    V: super::codegen::Codegen,
+    H: super::codegen::Codegen,
 {
     #[inline]
-    fn generate_piece(&self, gen: &mut crate::codegen::CodeGenerator) -> proc_macro2::TokenStream {
+    fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let map = gen.path("h::Map");
         let phf = gen.piece(&self.inner.phf);
         let data = gen.piece(&self.inner.data);
