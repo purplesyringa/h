@@ -124,7 +124,7 @@ pub trait PortableHash {
     ///
     /// This does not write the length of the slice beforehand and is semantically equivalent to
     /// calling [`PortableHash::hash`] for each element of the slice. When hashing a variable-length
-    /// collection, call [`Hasher::write_usize`] to emit the size before hashing the elements.
+    /// collection, call [`Hasher::write_u64`] to emit the size before hashing the elements.
     #[inline]
     fn hash_slice<H: Hasher>(data: &[Self], state: &mut H)
     where
@@ -213,7 +213,7 @@ impl<T: PortableHash> PortableHash for alloc::vec::Vec<T> {
 impl<T: PortableHash> PortableHash for [T] {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_usize(self.len());
+        state.write_u64(self.len() as u64);
         T::hash_slice(self, state);
     }
 }
