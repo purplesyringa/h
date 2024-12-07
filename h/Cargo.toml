@@ -10,89 +10,15 @@ categories = ["data-structures", "no-std"]
 edition = "2021"
 
 [dependencies]
-proc-macro2 = { version = "1", optional = true, default-features = false }
-quote = { version = "1", optional = true }
-radsort = { version = "0.1.1", optional = true }
-rapidhash = { version = "1.1.0", default-features = false }
-serde = { version = "1", optional = true, default-features = false, features = ["derive"] }
-thiserror = { version = "2.0.3", optional = true, default-features = false }
-typeid = "1.0.2"
-
-[dev-dependencies]
-zstd = "0.13.2"
+h-bare = { path = "../h-bare", default-features = false }
 
 [features]
 default = ["std"]
-alloc = ["serde?/alloc"]
-build = ["alloc", "dep:radsort"]
-codegen = ["std", "dep:proc-macro2", "dep:quote"]
-serde = ["dep:serde", "dep:thiserror"]
-std = ["alloc"]
+alloc = ["h-bare/alloc"]
+build = ["alloc", "h-bare/build"]
+codegen = ["std", "h-bare/codegen"]
+serde = ["h-bare/serde"]
+std = ["alloc", "h-bare/std"]
 
 [package.metadata.docs.rs]
 all-features = true
-
-[lints.rust]
-missing_docs = "warn"
-
-[lints.rustdoc]
-missing_crate_level_docs = "warn"
-unescaped_backticks = "warn"
-
-[lints.clippy]
-cargo = "warn"
-pedantic = "warn"
-alloc_instead_of_core = "warn"
-allow_attributes_without_reason = "warn"
-arithmetic_side_effects = "warn"
-as_underscore = "warn"
-assertions_on_result_states = "warn"
-clone_on_ref_ptr = "warn"
-decimal_literal_representation = "warn"
-default_numeric_fallback = "warn"
-deref_by_slicing = "warn"
-doc_markdown = "warn"
-else_if_without_else = "warn"
-empty_drop = "warn"
-empty_enum_variants_with_brackets = "warn"
-empty_structs_with_brackets = "warn"
-exhaustive_enums = "warn"
-exhaustive_structs = "warn"
-fn_to_numeric_cast_any = "warn"
-format_push_string = "warn"
-infinite_loop = "warn"
-inline_asm_x86_att_syntax = "warn"
-mem_forget = "warn" # use ManuallyDrop insteaad
-missing_assert_message = "warn"
-missing_const_for_fn = "warn"
-# missing_docs_in_private_items = "warn"
-missing_inline_in_public_items = "warn"
-missing_safety_doc = "warn"
-mixed_read_write_in_expression = "warn"
-multiple_unsafe_ops_per_block = "warn"
-mutex_atomic = "warn"
-needless_raw_strings = "warn"
-pub_without_shorthand = "warn"
-rc_buffer = "warn"
-rc_mutex = "warn"
-redundant_type_annotations = "warn"
-rest_pat_in_fully_bound_structs = "warn"
-same_name_method = "warn"
-self_named_module_files = "warn"
-semicolon_inside_block = "warn"
-separated_literal_suffix = "warn"
-shadow_unrelated = "warn"
-std_instead_of_alloc = "warn"
-std_instead_of_core = "warn"
-string_lit_chars_any = "warn"
-string_to_string = "warn"
-tests_outside_test_module = "warn"
-try_err = "warn"
-# undocumented_unsafe_blocks = "warn"
-unnecessary_safety_comment = "warn"
-unnecessary_safety_doc = "warn"
-unnecessary_self_imports = "warn"
-unneeded_field_pattern = "warn"
-unused_result_ok = "warn"
-wildcard_enum_match_arm = "warn"
-inline_always = "allow" # I'm not an idiot, this is a result of benchmarking/profiling

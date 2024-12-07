@@ -17,6 +17,13 @@ dependencies = [
 name = "h"
 version = "0.1.0"
 dependencies = [
+ "h-bare",
+]
+
+[[package]]
+name = "h-bare"
+version = "0.1.0"
+dependencies = [
  "proc-macro2",
  "quote",
  "radsort",

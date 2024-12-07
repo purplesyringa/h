@@ -1,5 +1,5 @@
 [workspace]
-members = ["h", "h-test"]
+members = ["h", "h-bare", "h-test"]
 resolver = "2"
 
 [profile.test]
