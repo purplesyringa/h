@@ -35,7 +35,7 @@ fn build_phf<'a>(context: &parse::Context, keys: impl Iterator<Item = &'a Expr>)
     // let phf = h::Phf::<Value>::from_keys(parsed_keys.iter());
 }
 
-#[proc_macro_error::proc_macro_error]
+#[proc_macro_error2::proc_macro_error]
 #[proc_macro]
 pub fn map(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as parse::WithContext<parse::MapArm>);

@@ -5,7 +5,7 @@ use super::{
     },
 };
 use proc_macro2::Span;
-use proc_macro_error::emit_error;
+use proc_macro_error2::emit_error;
 use std::fmt::Write;
 use syn::spanned::Spanned;
 
