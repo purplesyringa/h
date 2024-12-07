@@ -35,10 +35,9 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
     #[allow(clippy::arithmetic_side_effects, reason = "asserted")]
-    pub fn try_from_keys<'b>(keys: impl ExactSizeIterator<Item = &'b T> + Clone) -> Option<Self>
-    where
-        T: 'b,
-    {
+    pub fn try_from_keys(
+        keys: impl ExactSizeIterator<Item = impl Borrow<T>> + Clone,
+    ) -> Option<Self> {
         // Asserting this is enough to guarantee that `hash_space` never overflows.
         assert!(keys.len() <= isize::MAX as usize / 2, "Too many keys");
 
@@ -55,7 +54,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         // size. For good hashes, this loop should terminate soon.
         for hash in H::iter() {
             if let Some(unhashed_phf) = UnhashedPhf::try_from_keys(
-                keys.clone().map(|key| hash.hash(key)).collect(),
+                keys.clone().map(|key| hash.hash(key.borrow())).collect(),
                 hash_space,
             ) {
                 return Some(Self::from_raw_parts(hash, unhashed_phf));
@@ -82,10 +81,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         clippy::needless_pass_by_value,
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
-    pub fn from_keys<'b>(keys: impl ExactSizeIterator<Item = &'b T> + Clone) -> Self
-    where
-        T: 'b,
-    {
+    pub fn from_keys(keys: impl ExactSizeIterator<Item = impl Borrow<T>> + Clone) -> Self {
         Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
     }
 }
