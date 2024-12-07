@@ -41,12 +41,37 @@
 
 #![no_std]
 
+extern crate self as h;
+
 #[doc(inline)]
 pub use h_bare::*;
 
-// #[cfg(feature = "macros")]
-// pub use h_macros::map;
+#[cfg(feature = "macros")]
+pub use h_macros::map;
 // #[cfg(feature = "macros")]
 // pub use h_macros::phf;
 // #[cfg(feature = "macros")]
 // pub use h_macros::set;
+
+#[doc(hidden)]
+pub fn conjure<T>() -> T {
+    unreachable!();
+}
+
+#[cfg(feature = "macros")]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn macros() {
+        let phf: Map<(u64, u32), usize> = map! {
+            for (u64, u32);
+            (123, 123) => 0,
+            (123, 123) => 1,
+        };
+        assert_eq!(phf.get(&123), Some(&0));
+        assert_eq!(phf.get(&456), Some(&1));
+        assert_eq!(phf.get(&789), None);
+    }
+}

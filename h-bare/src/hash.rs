@@ -168,10 +168,12 @@ impl_write! {
     u16 => write_u16,
     u32 => write_u32,
     u64 => write_u64,
+    u128 => write_u128,
     i8 => write_i8,
     i16 => write_i16,
     i32 => write_i32,
     i64 => write_i64,
+    i128 => write_i128,
 }
 
 impl PortableHash for usize {
@@ -187,6 +189,22 @@ impl PortableHash for isize {
         state.write_i64(*self as i64);
     }
 }
+
+impl PortableHash for bool {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u8(*self as u8);
+    }
+}
+
+impl PortableHash for char {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(*self as u32);
+    }
+}
+
+// Floats shouldn't implement `Hash` because they don't implement `Eq`
 
 macro_rules! impl_str {
     ($ty:ty) => {

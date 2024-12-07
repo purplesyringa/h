@@ -1,8 +1,6 @@
 use super::{
     constants::get_constant,
-    types::{
-        type_ptr, FloatTypeNode, IntegerTypeNode, Node, NodePtr, NodeWithSpan, TypeNode, TypePtr,
-    },
+    types::{type_ptr, IntegerTypeNode, Node, NodePtr, NodeWithSpan, TypeNode, TypePtr},
 };
 use proc_macro2::Span;
 use proc_macro_error2::emit_error;
@@ -11,8 +9,11 @@ use syn::spanned::Spanned;
 
 #[derive(Clone)]
 pub enum Value {
-    Integer { absolute_value: u128, negated: bool },
-    Float { as_f32: f32, as_f64: f64 },
+    Integer {
+        absolute_value: u128,
+        negated: bool,
+        span: Span,
+    },
     Bool(bool),
     Char(char),
     Reference(Box<Value>),
@@ -25,11 +26,7 @@ pub enum Value {
 impl Value {
     pub fn has_inconsistencies(&self) -> bool {
         match self {
-            Self::Integer { .. }
-            | Self::Float { .. }
-            | Self::Bool(_)
-            | Self::Char(_)
-            | Self::Str(_) => false,
+            Self::Integer { .. } | Self::Bool(_) | Self::Char(_) | Self::Str(_) => false,
             Self::Reference(target) => target.has_inconsistencies(),
             Self::ArrayOrSlice(elems) | Self::Tuple(elems) => {
                 elems.iter().any(Self::has_inconsistencies)
@@ -75,6 +72,7 @@ macro_rules! from_signed_integer {
                         value: Value::Integer {
                             absolute_value: self.unsigned_abs() as u128,
                             negated: *self < 0,
+                            span: source,
                         },
                         ty: type_ptr!(source => {integer} $ty),
                     }
@@ -95,6 +93,7 @@ macro_rules! from_unsigned_integer {
                         value: Value::Integer {
                             absolute_value: *self as u128,
                             negated: false,
+                            span: source,
                         },
                         ty: type_ptr!(source => {integer} $ty),
                     }
@@ -105,30 +104,6 @@ macro_rules! from_unsigned_integer {
 }
 
 from_unsigned_integer!(u8 u16 u32 u64 u128);
-
-impl AsTypedValue for f32 {
-    fn as_typed_value(&self, source: Span) -> TypedValue {
-        TypedValue {
-            value: Value::Float {
-                as_f32: *self,
-                as_f64: 0.0,
-            },
-            ty: type_ptr!(source => {float} f32),
-        }
-    }
-}
-
-impl AsTypedValue for f64 {
-    fn as_typed_value(&self, source: Span) -> TypedValue {
-        TypedValue {
-            value: Value::Float {
-                as_f32: 0.0,
-                as_f64: *self,
-            },
-            ty: type_ptr!(source => {float} f64),
-        }
-    }
-}
 
 impl AsTypedValue for bool {
     fn as_typed_value(&self, source: Span) -> TypedValue {
@@ -281,6 +256,7 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                         .map(|byte| Value::Integer {
                             absolute_value: byte as u128,
                             negated: false,
+                            span: lit.span(),
                         })
                         .collect(),
                 ))),
@@ -324,43 +300,20 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                         value: Value::Integer {
                             absolute_value: value,
                             negated: false,
+                            span: lit.span(),
                         },
                         ty: type_ptr!(expr => {integer} #integer_type),
                     },
                     Err(_) => {
-                        emit_error!(lit.span(), "too large integer literal");
+                        emit_error!(lit.span(), "too large integer");
                         TypedValue::inconsistent()
                     }
                 }
             }
 
-            syn::Lit::Float(lit) => {
-                let float_type = if lit.suffix() == "" {
-                    NodePtr::Infer
-                } else {
-                    match FloatTypeNode::try_from_name(lit.suffix()) {
-                        Some(ty) => NodePtr::Known(NodeWithSpan {
-                            node: Box::new(ty),
-                            span: expr.span(),
-                        }),
-                        None => {
-                            emit_error!(
-                                lit.span(),
-                                "invalid floating-point literal suffix `{}`",
-                                lit.suffix()
-                            );
-                            NodePtr::Inconsistent
-                        }
-                    }
-                };
-
-                TypedValue {
-                    value: Value::Float {
-                        as_f32: lit.base10_parse().unwrap(),
-                        as_f64: lit.base10_parse().unwrap(),
-                    },
-                    ty: type_ptr!(expr => {float} #float_type),
-                }
+            syn::Lit::Float(_) => {
+                emit_error!(expr.span(), "floating-point numbers cannot be hashed");
+                TypedValue::inconsistent()
             }
 
             syn::Lit::Bool(lit) => bool::as_typed_value(&lit.value(), expr.span()),
@@ -480,18 +433,16 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                         }
 
                         syn::UnOp::Neg(_) => match *arg_node {
-                            TypeNode::Integer(_) | TypeNode::Float(_) => {
+                            TypeNode::Integer(_) => {
                                 let value = match argument.value {
                                     Value::Integer {
                                         absolute_value,
                                         negated,
+                                        ..
                                     } => Value::Integer {
                                         absolute_value,
                                         negated: !negated,
-                                    },
-                                    Value::Float { as_f32, as_f64 } => Value::Float {
-                                        as_f32: -as_f32,
-                                        as_f64: -as_f64,
+                                        span: expr.span(),
                                     },
                                     Value::Inconsistent => Value::Inconsistent,
                                     _ => unreachable!(),

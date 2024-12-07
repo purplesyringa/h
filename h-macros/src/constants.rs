@@ -22,8 +22,6 @@ pub fn get_constant(path: &str, span: Span) -> Option<TypedValue> {
         u32::MIN, u32::MAX,
         u64::MIN, u64::MAX,
         u128::MIN, u128::MAX,
-        f32::INFINITY, f32::MAX, f32::MIN, f32::NAN, f32::NEG_INFINITY,
-        f64::INFINITY, f64::MAX, f64::MIN, f64::NAN, f64::NEG_INFINITY,
         char::MIN, char::MAX, char::REPLACEMENT_CHARACTER,
     }))
 }

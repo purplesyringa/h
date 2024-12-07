@@ -1,6 +1,6 @@
 use proc_macro2::Span;
 use proc_macro_error2::emit_error;
-use std::fmt;
+use std::{fmt, ops::RangeInclusive};
 use syn::spanned::Spanned;
 
 pub type TypePtr = NodePtr<TypeNode>;
@@ -34,9 +34,6 @@ pub(crate) use node_ptr;
 macro_rules! type_node {
     ($span:expr => {integer} $($tt:tt)*) => {
         TypeNode::Integer($crate::types::node_ptr!(integer_type_node, $span => $($tt)*))
-    };
-    ($span:expr => {float} $($tt:tt)*) => {
-        TypeNode::Float($crate::types::node_ptr!(float_type_node, $span => $($tt)*))
     };
     ($span:expr => bool) => {
         TypeNode::Bool
@@ -99,16 +96,6 @@ macro_rules! integer_type_node {
 }
 pub(crate) use integer_type_node;
 
-macro_rules! float_type_node {
-    ($span:expr => f32) => {
-        FloatTypeNode::F32
-    };
-    ($span:expr => f64) => {
-        FloatTypeNode::F64
-    };
-}
-pub(crate) use float_type_node;
-
 #[derive(Clone)]
 pub enum NodePtr<T> {
     Infer,
@@ -135,13 +122,30 @@ impl<T: Node> NodePtr<T> {
             Self::Inconsistent => true,
         }
     }
+
+    pub fn has_infer(&self) -> bool {
+        match self {
+            Self::Infer => true,
+            Self::Known(NodeWithSpan { node, .. }) => node.has_infer(),
+            Self::Inconsistent => false,
+        }
+    }
+
+    pub fn unwrap_ref(&self) -> &T {
+        match self {
+            Self::Infer => panic!("cannot unwrap _ type"),
+            Self::Known(NodeWithSpan { node, .. }) => &*node,
+            Self::Inconsistent => panic!("cannot unwrap ? type"),
+        }
+    }
 }
 
 impl<T: fmt::Display> fmt::Display for NodePtr<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Infer | Self::Inconsistent => f.write_str("_"),
+            Self::Infer => f.write_str("_"),
             Self::Known(this) => write!(f, "{}", this.node),
+            Self::Inconsistent => f.write_str("?"),
         }
     }
 }
@@ -190,6 +194,7 @@ pub trait Node: fmt::Display + Sized {
     );
 
     fn has_inconsistencies(&self) -> bool;
+    fn has_infer(&self) -> bool;
 
     fn outer(&self) -> Self;
 }
@@ -203,7 +208,6 @@ pub struct NodeWithSpan<T> {
 #[derive(Clone)]
 pub enum TypeNode {
     Integer(NodePtr<IntegerTypeNode>),
-    Float(NodePtr<FloatTypeNode>),
     Bool,
     Char,
     Reference(TypePtr),
@@ -222,8 +226,6 @@ impl Node for TypeNode {
     ) {
         match (&mut *this.node, *other.node) {
             (Self::Integer(a), Self::Integer(b)) => a.unify_with(b, report),
-
-            (Self::Float(a), Self::Float(b)) => a.unify_with(b, report),
 
             (Self::Reference(a), Self::Reference(b))
             | (Self::Array(a), Self::Array(b))
@@ -252,7 +254,6 @@ impl Node for TypeNode {
     fn has_inconsistencies(&self) -> bool {
         match self {
             Self::Integer(node) => node.has_inconsistencies(),
-            Self::Float(node) => node.has_inconsistencies(),
             Self::Reference(node) => node.has_inconsistencies(),
             Self::Array(node) => node.has_inconsistencies(),
             Self::Slice(node) => node.has_inconsistencies(),
@@ -261,10 +262,20 @@ impl Node for TypeNode {
         }
     }
 
+    fn has_infer(&self) -> bool {
+        match self {
+            Self::Integer(node) => node.has_infer(),
+            Self::Reference(node) => node.has_infer(),
+            Self::Array(node) => node.has_infer(),
+            Self::Slice(node) => node.has_infer(),
+            Self::Tuple(elems) => elems.iter().any(|elem| elem.has_infer()),
+            Self::Bool | Self::Char | Self::Str | Self::Never => false,
+        }
+    }
+
     fn outer(&self) -> Self {
         match self {
             Self::Integer(_) => Self::Integer(NodePtr::Infer),
-            Self::Float(_) => Self::Float(NodePtr::Infer),
             Self::Bool => Self::Bool,
             Self::Char => Self::Char,
             Self::Reference(_) => Self::Reference(TypePtr::Infer),
@@ -282,8 +293,6 @@ impl fmt::Display for TypeNode {
         match self {
             Self::Integer(NodePtr::Infer | NodePtr::Inconsistent) => f.write_str("{integer}"),
             Self::Integer(NodePtr::Known(this)) => write!(f, "{}", this.node),
-            Self::Float(NodePtr::Infer | NodePtr::Inconsistent) => f.write_str("{float}"),
-            Self::Float(NodePtr::Known(this)) => write!(f, "{}", this.node),
             Self::Bool => f.write_str("bool"),
             Self::Char => f.write_str("char"),
             Self::Reference(node) => write!(f, "&{node}"),
@@ -320,6 +329,24 @@ pub enum IntegerTypeNode {
     I128,
 }
 
+impl IntegerTypeNode {
+    // For signed integers, returns `Ok(MIN..=MAX)`. For unsigned integers, returns `Err(MAX)`.
+    pub fn range(&self) -> Result<RangeInclusive<i128>, u128> {
+        match self {
+            Self::U8 => Err(u8::MAX as u128),
+            Self::U16 => Err(u16::MAX as u128),
+            Self::U32 => Err(u32::MAX as u128),
+            Self::U64 => Err(u64::MAX as u128),
+            Self::U128 => Err(u128::MAX),
+            Self::I8 => Ok(i8::MIN as i128..=i8::MAX as i128),
+            Self::I16 => Ok(i16::MIN as i128..=i16::MAX as i128),
+            Self::I32 => Ok(i32::MIN as i128..=i32::MAX as i128),
+            Self::I64 => Ok(i64::MIN as i128..=i64::MAX as i128),
+            Self::I128 => Ok(i128::MIN..=i128::MAX),
+        }
+    }
+}
+
 impl Node for IntegerTypeNode {
     fn unify_with(
         this: &mut NodeWithSpan<Self>,
@@ -332,6 +359,10 @@ impl Node for IntegerTypeNode {
     }
 
     fn has_inconsistencies(&self) -> bool {
+        false
+    }
+
+    fn has_infer(&self) -> bool {
         false
     }
 
@@ -357,41 +388,6 @@ impl fmt::Display for IntegerTypeNode {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum FloatTypeNode {
-    F32,
-    F64,
-}
-
-impl Node for FloatTypeNode {
-    fn unify_with(
-        this: &mut NodeWithSpan<Self>,
-        other: NodeWithSpan<Self>,
-        report: &mut impl FnMut(UnifyError),
-    ) {
-        if this.node != other.node {
-            report(UnifyError::new(this, &other));
-        }
-    }
-
-    fn has_inconsistencies(&self) -> bool {
-        false
-    }
-
-    fn outer(&self) -> Self {
-        *self
-    }
-}
-
-impl fmt::Display for FloatTypeNode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::F32 => f.write_str("f32"),
-            Self::F64 => f.write_str("f64"),
-        }
-    }
-}
-
 impl TypePtr {
     pub fn from_syn_type(ty: &syn::Type) -> Self {
         let node = match ty {
@@ -400,28 +396,32 @@ impl TypePtr {
             syn::Type::Infer(_) => return NodePtr::Infer,
             syn::Type::Never(_) => TypeNode::Never,
             syn::Type::Macro(_) => {
-                emit_error!(ty, "Macros are not allowed in type position");
+                emit_error!(ty, "macros are not allowed in type position");
                 return NodePtr::Inconsistent;
             }
             syn::Type::Paren(ty) => return Self::from_syn_type(&ty.elem),
             syn::Type::Path(ty) => {
                 if ty.qself.is_some() {
-                    emit_error!(ty, "Associated types are not allowed in type position");
+                    emit_error!(ty, "associated types are not allowed in type position");
+                    return NodePtr::Inconsistent;
+                }
+                if ty.path.is_ident("f32") || ty.path.is_ident("f64") {
+                    emit_error!(ty, "floating-point numbers cannot be hashed");
                     return NodePtr::Inconsistent;
                 }
                 if let Some(node) = ty.path.get_ident().and_then(TypeNode::try_from_ident) {
                     node
                 } else {
-                    emit_error!(ty, "Unknown type name");
+                    emit_error!(ty, "unknown type name");
                     return NodePtr::Inconsistent;
                 }
             }
             syn::Type::Reference(ty) => {
                 if let Some(lifetime) = &ty.lifetime {
-                    emit_error!(lifetime, "Lifetimes are not allowed in type annotations");
+                    emit_error!(lifetime, "lifetimes are not allowed in type annotations");
                 }
                 if let Some(mutability) = ty.mutability {
-                    emit_error!(mutability, "References in keys need to be immutable");
+                    emit_error!(mutability, "references in keys need to be immutable");
                 }
                 TypeNode::Reference(Self::from_syn_type(&ty.elem))
             }
@@ -430,7 +430,7 @@ impl TypePtr {
                 TypeNode::Tuple(ty.elems.iter().map(Self::from_syn_type).collect())
             }
             _ => {
-                emit_error!(ty, "Unsupported key type");
+                emit_error!(ty, "unsupported key type");
                 return NodePtr::Inconsistent;
             }
         };
@@ -449,13 +449,6 @@ impl TypeNode {
 
         if let Some(node) = IntegerTypeNode::try_from_name(name) {
             return Some(TypeNode::Integer(NodePtr::Known(NodeWithSpan {
-                node: Box::new(node),
-                span,
-            })));
-        }
-
-        if let Some(node) = FloatTypeNode::try_from_name(name) {
-            return Some(TypeNode::Float(NodePtr::Known(NodeWithSpan {
                 node: Box::new(node),
                 span,
             })));
@@ -483,16 +476,6 @@ impl IntegerTypeNode {
             "i32" => Self::I32,
             "i64" => Self::I64,
             "i128" => Self::I128,
-            _ => return None,
-        })
-    }
-}
-
-impl FloatTypeNode {
-    pub fn try_from_name(name: &str) -> Option<Self> {
-        Some(match name {
-            "f32" => Self::F32,
-            "f64" => Self::F64,
             _ => return None,
         })
     }
