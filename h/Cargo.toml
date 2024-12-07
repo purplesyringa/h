@@ -11,12 +11,14 @@ edition = "2021"
 
 [dependencies]
 h-bare = { path = "../h-bare", default-features = false }
+h-macros = { path = "../h-macros", optional = true }
 
 [features]
 default = ["std"]
 alloc = ["h-bare/alloc"]
 build = ["alloc", "h-bare/build"]
 codegen = ["std", "h-bare/codegen"]
+macros = ["dep:h-macros"]
 serde = ["h-bare/serde"]
 std = ["alloc", "h-bare/std"]
 

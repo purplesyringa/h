@@ -36,9 +36,17 @@
 //! - `build`: Enables `from_*` methods. Necessary for runtime building or programmatic generation
 //!   in `build.rs`.
 //! - `codegen`: Enables [`codegen`]. Necessary for programmatic generation in `build.rs`.
+//! - `macros`: Enables macros like [`map!`].
 //! - `serde`: Enables [serde](https://serde.rs/) support.
 
 #![no_std]
 
 #[doc(inline)]
 pub use h_bare::*;
+
+// #[cfg(feature = "macros")]
+// pub use h_macros::map;
+// #[cfg(feature = "macros")]
+// pub use h_macros::phf;
+// #[cfg(feature = "macros")]
+// pub use h_macros::set;
