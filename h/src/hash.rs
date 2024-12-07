@@ -73,7 +73,8 @@ impl GenericHasher {
 /// extending the length of the integer type up to 64 bits.
 ///
 /// For 128-bit integers, `low.wrapping_mul(self.low) ^ high.wrapping_mul(self.high)` is computed,
-/// where `low` and `high` are the low and the high 64 bits of the key.
+/// where `low` and `high` are the low and the high 64 bits of the key. This means that if
+/// `self.high == 0`, hashing a 128-bit integer is equivalent to hashing its low 64-bit half.
 ///
 /// For other types, rapidhash is applied to the output of [`PortableHash`], with `self.low` used as
 /// the seed.
