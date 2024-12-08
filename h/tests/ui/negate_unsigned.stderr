@@ -1,0 +1,5 @@
+error: cannot apply unary operator `-` to type `u8`
+ --> tests/ui/negate_unsigned.rs:4:9
+  |
+4 |         -1 => (),
+  |         ^^

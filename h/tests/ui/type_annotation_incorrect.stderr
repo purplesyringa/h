@@ -1,0 +1,114 @@
+error: macros are not allowed in type position
+ --> tests/ui/type_annotation_incorrect.rs:3:13
+  |
+3 |         for cute!();
+  |             ^^^^^^^
+
+error: associated types are not allowed in type position
+ --> tests/ui/type_annotation_incorrect.rs:7:13
+  |
+7 |         for <i32 as core::ops::Add>::Output;
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: floating-point numbers cannot be hashed
+  --> tests/ui/type_annotation_incorrect.rs:11:14
+   |
+11 |         for (f32, f64);
+   |              ^^^
+
+error: floating-point numbers cannot be hashed
+  --> tests/ui/type_annotation_incorrect.rs:11:19
+   |
+11 |         for (f32, f64);
+   |                   ^^^
+
+error: floating-point numbers cannot be hashed
+  --> tests/ui/type_annotation_incorrect.rs:12:10
+   |
+12 |         (0., -0.) => (),
+   |          ^^
+
+error: floating-point numbers cannot be hashed
+  --> tests/ui/type_annotation_incorrect.rs:12:15
+   |
+12 |         (0., -0.) => (),
+   |               ^^
+
+error: unknown type name
+       `h` macros do not understand manually declared types, use `h::codegen` instead
+  --> tests/ui/type_annotation_incorrect.rs:16:13
+   |
+16 |         for What_is_a_type;
+   |             ^^^^^^^^^^^^^^
+
+error: lifetimes are not allowed in type annotations
+  --> tests/ui/type_annotation_incorrect.rs:20:14
+   |
+20 |         for &'_ str;
+   |              ^^
+
+error: lifetimes are not allowed in type annotations
+  --> tests/ui/type_annotation_incorrect.rs:25:14
+   |
+25 |         for &'a str;
+   |              ^^
+
+error: lifetimes are not allowed in type annotations
+  --> tests/ui/type_annotation_incorrect.rs:30:14
+   |
+30 |         for &'static str;
+   |              ^^^^^^^
+
+error: references in keys need to be immutable
+  --> tests/ui/type_annotation_incorrect.rs:35:14
+   |
+35 |         for &mut i32;
+   |              ^^^
+
+error: references in keys need to be immutable
+  --> tests/ui/type_annotation_incorrect.rs:37:10
+   |
+37 |         &mut 1 => (),
+   |          ^^^
+
+error: unsupported key type
+  --> tests/ui/type_annotation_incorrect.rs:41:13
+   |
+41 |         for impl Sync;
+   |             ^^^^^^^^^
+
+error: cannot find macro `cute` in this scope
+ --> tests/ui/type_annotation_incorrect.rs:3:13
+  |
+3 |         for cute!();
+  |             ^^^^
+  |
+  = note: this error originates in the macro `unimplemented` which comes from the expansion of the macro `h::map` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0261]: use of undeclared lifetime name `'a`
+  --> tests/ui/type_annotation_incorrect.rs:25:14
+   |
+1  | fn main() {
+   |        - help: consider introducing lifetime `'a` here: `<'a>`
+...
+25 |         for &'a str;
+   |              ^^ undeclared lifetime
+   |
+   = note: this error originates in the macro `unimplemented` which comes from the expansion of the macro `h::map` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0412]: cannot find type `What_is_a_type` in this scope
+  --> tests/ui/type_annotation_incorrect.rs:16:13
+   |
+16 |         for What_is_a_type;
+   |             ^^^^^^^^^^^^^^ not found in this scope
+   |
+   = note: this error originates in the macro `unimplemented` which comes from the expansion of the macro `h::map` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0562]: `impl Trait` is not allowed in paths
+  --> tests/ui/type_annotation_incorrect.rs:41:13
+   |
+41 |         for impl Sync;
+   |             ^^^^^^^^^
+   |
+   = note: `impl Trait` is only allowed in arguments and return types of functions and methods
+   = note: this error originates in the macro `unimplemented` which comes from the expansion of the macro `h::map` (in Nightly builds, run with -Z macro-backtrace for more info)

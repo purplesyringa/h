@@ -1,0 +1,17 @@
+error: too large integer (doesn't fit in `u8`)
+ --> tests/ui/integer_too_large.rs:4:9
+  |
+4 |         256 => (),
+  |         ^^^
+
+error: too large integer (doesn't fit in `i8`)
+ --> tests/ui/integer_too_large.rs:9:9
+  |
+9 |         -129 => (),
+  |         ^^^^
+
+error: too large integer
+  --> tests/ui/integer_too_large.rs:14:9
+   |
+14 |         1_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_u128 => (),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

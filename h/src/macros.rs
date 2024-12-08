@@ -103,4 +103,10 @@ mod tests {
         let guard = mutex.lock().unwrap();
         assert_eq!(*guard, 1);
     }
+
+    #[test]
+    fn ui() {
+        let t = trybuild::TestCases::new();
+        t.compile_fail("tests/ui/*.rs");
+    }
 }

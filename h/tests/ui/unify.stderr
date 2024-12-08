@@ -1,0 +1,42 @@
+error: type `u64`, inferred from here, contradicts an earlier type annotation
+ --> tests/ui/unify.rs:3:20
+  |
+3 |         [1, 2_u32, 3_u64] => ()
+  |                    ^^^^^
+
+error: the type was inferred as `u32` here
+ --> tests/ui/unify.rs:3:13
+  |
+3 |         [1, 2_u32, 3_u64] => ()
+  |             ^^^^^
+
+error: type `u64`, inferred from here, contradicts an earlier type annotation
+ --> tests/ui/unify.rs:9:9
+  |
+9 |         3_u64 => (),
+  |         ^^^^^
+
+error: the type was inferred as `u32` here
+ --> tests/ui/unify.rs:8:9
+  |
+8 |         2_u32 => (),
+  |         ^^^^^
+
+error: type `i64`, inferred from here, contradicts an earlier type annotation
+  --> tests/ui/unify.rs:14:11
+   |
+14 |         &[1_i64, 2, 3, 4][..] => (),
+   |           ^^^^^
+
+error: the type was inferred as `i32` here
+  --> tests/ui/unify.rs:13:11
+   |
+13 |         &[1_i32, 2, 3][..] => (),
+   |           ^^^^^
+
+error: cannot cast a value of type `{integer}` to `&_`
+       `h` is not a full-blown interpreter; only trivial and unsizing casts (`&[T; N]` to `&[T]`) are supported
+  --> tests/ui/unify.rs:18:9
+   |
+18 |         1 as &str => (),
+   |         ^

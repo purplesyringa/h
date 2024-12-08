@@ -1,0 +1,49 @@
+error: C-string literals are not supported
+       `h` is not a full-blown interpreter
+  --> tests/ui/types.rs:14:9
+   |
+14 |         c"meow" => (),
+   |         ^^^^^^^
+
+error: cannot perform this indexing operation
+       `h` is not a full-blown interpreter; only unsizing `array[..]` slicing is supported
+  --> tests/ui/types.rs:19:9
+   |
+19 |         [1][0] => (),
+   |         ^^^^^^
+
+error: invalid integer literal suffix `integer`
+  --> tests/ui/types.rs:24:9
+   |
+24 |         0_integer => (),
+   |         ^^^^^^^^^
+
+error: macros are not allowed in key position
+  --> tests/ui/types.rs:29:9
+   |
+29 | /         h::map! {
+30 | |             for _;
+31 | |             () => (),
+32 | |         } => (),
+   | |_________^
+
+error: trait paths are not allowed in key position
+       `h` is not a full-blown interpreter; only certain constants are supported
+  --> tests/ui/types.rs:37:9
+   |
+37 |         <()>::MEOW => (),
+   |         ^^^^^^^^^^
+
+error: trait paths are not allowed in key position
+       `h` is not a full-blown interpreter; only certain constants are supported
+  --> tests/ui/types.rs:38:9
+   |
+38 |         <() as WithConst>::MEOW => (),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: generic parameters are not allowed in paths in key position
+       `h` is not a full-blown interpreter; only certain constants are supported
+  --> tests/ui/types.rs:39:9
+   |
+39 |         Meow::<i32>::WithConst => (),
+   |         ^^^^^^^^^^^^^^^^^^^^^^

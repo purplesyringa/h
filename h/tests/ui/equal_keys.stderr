@@ -1,0 +1,11 @@
+error: this key is equivalent to...
+ --> tests/ui/equal_keys.rs:4:9
+  |
+4 |         0 => Some(()),
+  |         ^
+
+error: ...this key
+ --> tests/ui/equal_keys.rs:5:9
+  |
+5 |         0 => None,
+  |         ^

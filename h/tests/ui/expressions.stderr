@@ -1,0 +1,25 @@
+error: unsupported unary operator
+       `h` is not a full-blown interpreter; only certain operators are allowed
+ --> tests/ui/expressions.rs:3:9
+  |
+3 |         !0_i32 => (),
+  |         ^^^^^^
+
+error: cannot apply unary operator `-` to type `&_`
+ --> tests/ui/expressions.rs:7:9
+  |
+7 |         -"meow" => (),
+  |         ^^^^^^^
+
+error: type `{integer}` cannot be dereferenced
+  --> tests/ui/expressions.rs:11:9
+   |
+11 |         *0 => (),
+   |         ^^
+
+error: unsupported expression
+       `h` is not a full-blown interpreter; only certain operators are allowed
+  --> tests/ui/expressions.rs:15:9
+   |
+15 |         if false { main() } => ()
+   |         ^^^^^^^^^^^^^^^^^^^
