@@ -16,6 +16,7 @@ enum Inner<T> {
     RunTime(alloc::vec::Vec<T>),
 }
 
+unsafe impl<T: Send> Send for Inner<T> {}
 unsafe impl<T: Sync> Sync for Inner<T> {}
 
 impl<T> ConstVec<T> {
