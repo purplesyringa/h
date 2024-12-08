@@ -16,6 +16,33 @@
 //!
 //! This limitation applies only to keys of [`Map`]s and values of [`Set`]s and [`Phf`]s. Notably,
 //! it doesn't apply to values of [`Map`]s, as the values don't need to be analyzed in compile time.
+//!
+//!
+//! # Type inference
+//!
+//! The macros try to infer the key types from the provided keys, but this is not always possible.
+//! For example, in the following context:
+//!
+//! ```compile_fail
+//! const MAP: &h::Map<(u64, &str), ()> = h::map! {
+//!     (1, "a") => (),
+//!     (2, "b") => (),
+//! };
+//! ```
+//!
+//! ...the macro cannot guess the correct key type, as macros cannot "look outside" or participate
+//! in type inference. In this case, the type has to be specified explicitly:
+//!
+//! ```rust
+//! const MAP: &h::Map<(u64, &str), ()> = h::map! {
+//!     for (u64, _);  // type annotation
+//!     (1, "a") => (),
+//!     (2, "b") => (),
+//! };
+//! ```
+//!
+//! Note that it's only necessary to specify types that could not be inferred otherwise, although
+//! `for (u64, &str);` would work too.
 use super::*;
 
 #[doc(hidden)]
