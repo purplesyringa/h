@@ -115,6 +115,12 @@ pub use h_macros;
 /// or:
 ///
 /// > cannot borrow `*map` as mutable, as it is behind a `&` reference
+///
+///
+/// # Nesting
+///
+/// Mutable maps can be nested, constant ones can't. It is almost always more efficient to use
+/// a tuple as a key instead.
 #[cfg(doc)]
 #[macro_export]
 macro_rules! map {
