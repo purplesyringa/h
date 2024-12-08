@@ -1,6 +1,12 @@
 [package]
 name = "h-macros"
+description = "Practical, efficient perfect hash functions (procedural macros)"
 version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/purplesyringa/h"
+readme = "README.md"
+keywords = ["perfect", "hashing", "phf", "proc-macro"]
+categories = ["data-structures"]
 edition = "2021"
 
 [lib]
