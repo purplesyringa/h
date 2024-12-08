@@ -81,22 +81,7 @@ impl GenericHasher {
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
     #[inline]
     fn hash(&self, key: &T) -> u64 {
-        #[allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "intentional"
-        )]
-        if let Some(x) = reinterpret_scalar_up_to_64bit(key) {
-            x.wrapping_mul(self.low)
-        } else if let Some(&x) = unsafe { reinterpret_scalar::<_, u128>(key) } {
-            (x as u64).wrapping_mul(self.low) ^ ((x >> 64i32) as u64).wrapping_mul(self.high)
-        } else if let Some(&x) = unsafe { reinterpret_scalar::<_, i128>(key) } {
-            (x as u64).wrapping_mul(self.low) ^ ((x >> 64i32) as u64).wrapping_mul(self.high)
-        } else {
-            let mut state = rapidhash::RapidHasher::new(self.low);
-            key.hash(&mut state);
-            state.finish()
-        }
+        key.hash_generic_exclusive(self)
     }
 
     #[inline]
@@ -114,6 +99,9 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
 ///
 /// Much like with [`core::hash::Hash`], `Eq`-equal objects must imply equal data passed to the
 /// hasher, and the data must be prefix-free.
+///
+/// Similarly, if `T: Borrow<U>` and both `T` and `U` implement [`PortableHash`], the hashes must be
+/// equal between a value and its borrowed counterpart.
 ///
 /// In addition, the written data must be portable between platforms. For example, directly writing
 /// `usize` into the hasher is a bad idea because of possible differences in pointer size.
@@ -135,12 +123,34 @@ pub trait PortableHash {
             piece.hash(state);
         }
     }
+
+    /// Compute the hash of a value using [`GenericHasher`].
+    ///
+    /// The purpose of this method is to hash small primitives more efficiently than with
+    /// a streaming hash. As such, hashing a value as part of a larger value is not supported.
+    ///
+    /// This method should not usually be overloaded, as [`GenericHasher`] has no useful public
+    /// methods. However, if `T: Borrow<U>`, the implementations of `hash_generic_exclusive` for
+    /// the borrowed and unborrowed values must match. For example, a hypothetical implementation of
+    /// `hash_generic_exclusive` for [`String`](alloc::string::String) needs to forward the
+    /// computation to `hash_generic_exclusive` for [`str`].
+    #[inline]
+    fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+        let mut state = rapidhash::RapidHasher::new(hasher.low);
+        self.hash(&mut state);
+        state.finish()
+    }
 }
 
 impl<T: ?Sized + PortableHash> PortableHash for &T {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         (**self).hash(state);
+    }
+
+    #[inline]
+    fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+        (**self).hash_generic_exclusive(hasher)
     }
 }
 
@@ -149,9 +159,14 @@ impl<T: ?Sized + PortableHash> PortableHash for &mut T {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (**self).hash(state);
     }
+
+    #[inline]
+    fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+        (**self).hash_generic_exclusive(hasher)
+    }
 }
 
-macro_rules! impl_write {
+macro_rules! impl_primitive {
     ($($ty:ty => $fn:ident,)*) => {
         $(
             impl PortableHash for $ty {
@@ -159,20 +174,54 @@ macro_rules! impl_write {
                 fn hash<H: Hasher>(&self, state: &mut H) {
                     state.$fn(*self);
                 }
+
+                #[inline]
+                fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+                    #[allow(clippy::cast_lossless, reason = "generic code")]
+                    #[allow(clippy::cast_sign_loss, reason = "intentional")]
+                    (*self as u64).wrapping_mul(hasher.low)
+                }
             }
         )*
     };
 }
-impl_write! {
+impl_primitive! {
     u8 => write_u8,
     u16 => write_u16,
     u32 => write_u32,
     u64 => write_u64,
-    u128 => write_u128,
     i8 => write_i8,
     i16 => write_i16,
     i32 => write_i32,
     i64 => write_i64,
+}
+
+macro_rules! impl_primitive_128 {
+    ($($ty:ty => $fn:ident,)*) => {
+        $(
+            impl PortableHash for $ty {
+                #[inline]
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    state.$fn(*self);
+                }
+
+                #[inline]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "intentional"
+                )]
+                fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+                    let low = *self as u64;
+                    let high = (*self >> 64i32) as u64;
+                    low.wrapping_mul(hasher.low) ^ high.wrapping_mul(hasher.high)
+                }
+            }
+        )*
+    };
+}
+impl_primitive_128! {
+    u128 => write_u128,
     i128 => write_i128,
 }
 
@@ -181,12 +230,23 @@ impl PortableHash for usize {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(*self as u64);
     }
+
+    #[inline]
+    fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+        (*self as u64).wrapping_mul(hasher.low)
+    }
 }
 
 impl PortableHash for isize {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_i64(*self as i64);
+    }
+
+    #[inline]
+    fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+        #[allow(clippy::cast_sign_loss, reason = "intentional")]
+        (*self as u64).wrapping_mul(hasher.low)
     }
 }
 
@@ -235,40 +295,6 @@ impl<T: PortableHash> PortableHash for [T] {
         state.write_u64(self.len() as u64);
         T::hash_slice(self, state);
     }
-}
-
-/// Cast `&T` to `&U` if the types are statically known to be equal.
-///
-/// # Safety
-///
-/// The cast-to type `U` must not contain lifetimes, not even `'static`.
-unsafe fn reinterpret_scalar<T: ?Sized, U: ?Sized + 'static>(x: &T) -> Option<&U> {
-    let ty = typeid::of::<T>();
-    if ty == typeid::of::<U>() {
-        return Some(unsafe { core::mem::transmute_copy::<&T, &U>(&x) });
-    }
-    // Scalars only implement Borrow for one level of references, so it's sound to just check &U and
-    // not &&U and so on.
-    if ty == typeid::of::<&U>() {
-        return Some(*unsafe { core::mem::transmute_copy::<&T, &&U>(&x) });
-    }
-    None
-}
-
-fn reinterpret_scalar_up_to_64bit<T: ?Sized>(x: &T) -> Option<u64> {
-    macro_rules! imp {
-        ($($ty:ty),*) => {
-            $(
-                if let Some(&x) = unsafe { reinterpret_scalar::<T, $ty>(x) } {
-                    #[allow(clippy::cast_lossless, reason = "generic code")]
-                    #[allow(clippy::cast_sign_loss, reason = "intentional")]
-                    return Some(x as u64);
-                }
-            )*
-        };
-    }
-    imp!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, bool);
-    None
 }
 
 #[cfg(feature = "codegen")]

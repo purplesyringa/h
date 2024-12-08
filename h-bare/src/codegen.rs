@@ -29,6 +29,7 @@
 //! # Example
 //!
 //! ```rust
+//! # extern crate h_bare as h;
 //! # fn main() -> std::io::Result<()> {
 //! // Create a hash map
 //! let map: h::Map<i32, i32> = h::Map::from_entries(vec![(1, 2), (3, 4)]);
