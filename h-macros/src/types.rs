@@ -1,6 +1,6 @@
+use core::{fmt, ops::RangeInclusive};
 use proc_macro2::Span;
 use proc_macro_error2::emit_error;
-use std::{fmt, ops::RangeInclusive};
 use syn::spanned::Spanned;
 
 pub type TypePtr = NodePtr<TypeNode>;
@@ -225,15 +225,15 @@ impl Node for TypeNode {
         report: &mut impl FnMut(UnifyError),
     ) {
         match (&mut *this.node, *other.node) {
-            (Self::Integer(a), Self::Integer(b)) => a.unify_with(b, report),
+            (Self::Integer(x), Self::Integer(y)) => x.unify_with(y, report),
 
-            (Self::Reference(a), Self::Reference(b))
-            | (Self::Array(a), Self::Array(b))
-            | (Self::Slice(a), Self::Slice(b)) => a.unify_with(b, report),
+            (Self::Reference(x), Self::Reference(y))
+            | (Self::Array(x), Self::Array(y))
+            | (Self::Slice(x), Self::Slice(y)) => x.unify_with(y, report),
 
-            (Self::Tuple(a), Self::Tuple(b)) if a.len() == b.len() => {
-                for (a, b) in a.iter_mut().zip(b) {
-                    a.unify_with(b, report);
+            (Self::Tuple(xs), Self::Tuple(ys)) if xs.len() == ys.len() => {
+                for (x, y) in xs.iter_mut().zip(ys) {
+                    x.unify_with(y, report);
                 }
             }
 
@@ -254,10 +254,10 @@ impl Node for TypeNode {
     fn has_inconsistencies(&self) -> bool {
         match self {
             Self::Integer(node) => node.has_inconsistencies(),
-            Self::Reference(node) => node.has_inconsistencies(),
-            Self::Array(node) => node.has_inconsistencies(),
-            Self::Slice(node) => node.has_inconsistencies(),
-            Self::Tuple(elems) => elems.iter().any(|elem| elem.has_inconsistencies()),
+            Self::Reference(node) | Self::Array(node) | Self::Slice(node) => {
+                node.has_inconsistencies()
+            }
+            Self::Tuple(elems) => elems.iter().any(NodePtr::has_inconsistencies),
             Self::Bool | Self::Char | Self::Str | Self::Never => false,
         }
     }
@@ -265,10 +265,8 @@ impl Node for TypeNode {
     fn has_infer(&self) -> bool {
         match self {
             Self::Integer(node) => node.has_infer(),
-            Self::Reference(node) => node.has_infer(),
-            Self::Array(node) => node.has_infer(),
-            Self::Slice(node) => node.has_infer(),
-            Self::Tuple(elems) => elems.iter().any(|elem| elem.has_infer()),
+            Self::Reference(node) | Self::Array(node) | Self::Slice(node) => node.has_infer(),
+            Self::Tuple(elems) => elems.iter().any(NodePtr::has_infer),
             Self::Bool | Self::Char | Self::Str | Self::Never => false,
         }
     }
@@ -298,7 +296,7 @@ impl fmt::Display for TypeNode {
             Self::Reference(node) => write!(f, "&{node}"),
             Self::Array(node) => write!(f, "[{node}; _]"),
             Self::Slice(node) => write!(f, "[{node}]"),
-            Self::Tuple(elements) => match &elements[..] {
+            Self::Tuple(elements) => match &**elements {
                 [] => f.write_str("()"),
                 [elem] => write!(f, "({elem},)"),
                 [head, tail @ ..] => {
@@ -331,17 +329,17 @@ pub enum IntegerTypeNode {
 
 impl IntegerTypeNode {
     // For signed integers, returns `Ok(MIN..=MAX)`. For unsigned integers, returns `Err(MAX)`.
-    pub fn range(&self) -> Result<RangeInclusive<i128>, u128> {
+    pub fn range(self) -> Result<RangeInclusive<i128>, u128> {
         match self {
-            Self::U8 => Err(u8::MAX as u128),
-            Self::U16 => Err(u16::MAX as u128),
-            Self::U32 => Err(u32::MAX as u128),
-            Self::U64 => Err(u64::MAX as u128),
+            Self::U8 => Err(u8::MAX.into()),
+            Self::U16 => Err(u16::MAX.into()),
+            Self::U32 => Err(u32::MAX.into()),
+            Self::U64 => Err(u64::MAX.into()),
             Self::U128 => Err(u128::MAX),
-            Self::I8 => Ok(i8::MIN as i128..=i8::MAX as i128),
-            Self::I16 => Ok(i16::MIN as i128..=i16::MAX as i128),
-            Self::I32 => Ok(i32::MIN as i128..=i32::MAX as i128),
-            Self::I64 => Ok(i64::MIN as i128..=i64::MAX as i128),
+            Self::I8 => Ok(i8::MIN.into()..=i8::MAX.into()),
+            Self::I16 => Ok(i16::MIN.into()..=i16::MAX.into()),
+            Self::I32 => Ok(i32::MIN.into()..=i32::MAX.into()),
+            Self::I64 => Ok(i64::MIN.into()..=i64::MAX.into()),
             Self::I128 => Ok(i128::MIN..=i128::MAX),
         }
     }

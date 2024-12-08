@@ -1,12 +1,17 @@
+#![allow(
+    clippy::shadow_unrelated,
+    reason = "https://github.com/rust-lang/rust-clippy/issues/11827"
+)]
+
 use super::{
     types::{IntegerTypeNode, TypeNode, TypePtr},
     values::Value,
 };
 use byteorder::{NativeEndian as NE, ReadBytesExt, WriteBytesExt};
+use core::hash::Hasher;
 use h::hash::PortableHash;
 use proc_macro2::TokenStream;
 use proc_macro_error2::emit_error;
-use std::hash::Hasher;
 use std::rc::Rc;
 
 struct State {
@@ -33,7 +38,9 @@ impl State {
 
                 let integer_type_node = integer_type_node.unwrap_ref();
                 let fits = match integer_type_node.range() {
-                    Ok(range) => {
+                    Ok(range) =>
+                    {
+                        #[allow(clippy::cast_sign_loss, reason = "intended")]
                         if *negated {
                             as_u128 >= *range.start() as u128
                         } else {
@@ -55,6 +62,8 @@ impl State {
                     return;
                 }
 
+                #[allow(clippy::cast_possible_truncation, reason = "checked to not occur")]
+                #[allow(clippy::cast_possible_wrap, reason = "intended")]
                 match integer_type_node {
                     IntegerTypeNode::U8 => self.data.write_u8(as_u128 as u8),
                     IntegerTypeNode::U16 => self.data.write_u16::<NE>(as_u128 as u16),
@@ -67,13 +76,13 @@ impl State {
                     IntegerTypeNode::I64 => self.data.write_i64::<NE>(as_u128 as i64),
                     IntegerTypeNode::I128 => self.data.write_i128::<NE>(as_u128 as i128),
                 }
-                .unwrap()
+                .unwrap();
             }
 
-            (Value::Bool(value), TypeNode::Bool) => self.data.write_u8(*value as u8).unwrap(),
+            (Value::Bool(value), TypeNode::Bool) => self.data.write_u8((*value).into()).unwrap(),
 
             (Value::Char(value), TypeNode::Char) => {
-                self.data.write_u32::<NE>(*value as u32).unwrap()
+                self.data.write_u32::<NE>(*value as u32).unwrap();
             }
 
             (Value::Reference(value), TypeNode::Reference(ty)) => self.encode_value_to(value, ty),
@@ -134,7 +143,7 @@ fn hash<H: Hasher>(data: &mut &[u8], ty: &TypePtr, state: &mut H) {
         TypeNode::Reference(ty) => hash(data, ty, state),
 
         TypeNode::Array(ty) | TypeNode::Slice(ty) => {
-            let count = data.read_u64::<NE>().unwrap() as usize;
+            let count: usize = data.read_u64::<NE>().unwrap().try_into().unwrap();
             for _ in 0..count {
                 hash(data, ty, state);
             }
@@ -147,8 +156,8 @@ fn hash<H: Hasher>(data: &mut &[u8], ty: &TypePtr, state: &mut H) {
         }
 
         TypeNode::Str => {
-            let len = data.read_u64::<NE>().unwrap() as usize;
-            std::str::from_utf8(&data[..len]).unwrap().hash(state);
+            let len = data.read_u64::<NE>().unwrap().try_into().unwrap();
+            core::str::from_utf8(&data[..len]).unwrap().hash(state);
             hash(data, ty, state);
             *data = &data[len..];
         }
@@ -165,7 +174,7 @@ pub struct EncodedValue {
 
 impl PortableHash for EncodedValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut cursor = &self.data[..];
+        let mut cursor = &*self.data;
         hash(&mut cursor, &self.ty, state);
     }
 }

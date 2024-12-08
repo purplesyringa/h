@@ -53,7 +53,9 @@ pub use h_macros::map;
 // #[cfg(feature = "macros")]
 // pub use h_macros::set;
 
+#[must_use]
 #[doc(hidden)]
+#[inline]
 pub fn conjure<T>() -> T {
     unreachable!();
 }
@@ -65,10 +67,10 @@ mod tests {
 
     #[test]
     fn macros() {
-        let phf: Map<(u64, u32), usize> = map! {
-            for (u64, u32);
-            (123, 123) => 0,
-            (123, 123) => 1,
+        let phf: Map<u64, usize> = map! {
+            for u64;
+            123 => 0,
+            456 => 1,
         };
         assert_eq!(phf.get(&123), Some(&0));
         assert_eq!(phf.get(&456), Some(&1));

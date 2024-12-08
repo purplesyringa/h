@@ -12,3 +12,6 @@ zstd = "0.13.2"
 
 [features]
 enabled = []
+
+[lints]
+workspace = true

@@ -1,10 +1,15 @@
+#![allow(
+    clippy::shadow_unrelated,
+    reason = "https://github.com/rust-lang/rust-clippy/issues/13795"
+)]
+
 use super::{
     constants::get_constant,
     types::{type_ptr, IntegerTypeNode, Node, NodePtr, NodeWithSpan, TypeNode, TypePtr},
 };
+use core::fmt::Write;
 use proc_macro2::Span;
 use proc_macro_error2::emit_error;
-use std::fmt::Write;
 use syn::spanned::Spanned;
 
 #[derive(Clone)]
@@ -43,7 +48,7 @@ pub struct TypedValue {
 }
 
 impl TypedValue {
-    fn inconsistent() -> Self {
+    const fn inconsistent() -> Self {
         Self {
             value: Value::Inconsistent,
             ty: NodePtr::Inconsistent,
@@ -70,7 +75,7 @@ macro_rules! from_signed_integer {
                 fn as_typed_value(&self, source: Span) -> TypedValue {
                     TypedValue {
                         value: Value::Integer {
-                            absolute_value: self.unsigned_abs() as u128,
+                            absolute_value: self.unsigned_abs().into(),
                             negated: *self < 0,
                             span: source,
                         },
@@ -91,7 +96,7 @@ macro_rules! from_unsigned_integer {
                 fn as_typed_value(&self, source: Span) -> TypedValue {
                     TypedValue {
                         value: Value::Integer {
-                            absolute_value: *self as u128,
+                            absolute_value: (*self).into(),
                             negated: false,
                             span: source,
                         },
@@ -202,7 +207,7 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                         (&mut **node_from, &mut **node_to)
                     {
                         // Stupid fucking ownership semantics
-                        let elem_ty_from = std::mem::replace(elem_ty_from, NodePtr::Infer);
+                        let elem_ty_from = core::mem::replace(elem_ty_from, NodePtr::Infer);
                         elem_ty_to.unify_with(elem_ty_from, &mut |e| {
                             value = Value::Inconsistent;
                             e.emit_cast();
@@ -254,7 +259,7 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                     lit.value()
                         .into_iter()
                         .map(|byte| Value::Integer {
-                            absolute_value: byte as u128,
+                            absolute_value: byte.into(),
                             negated: false,
                             span: lit.span(),
                         })
@@ -278,36 +283,32 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
             syn::Lit::Int(lit) => {
                 let integer_type = if lit.suffix() == "" {
                     NodePtr::Infer
+                } else if let Some(ty) = IntegerTypeNode::try_from_name(lit.suffix()) {
+                    NodePtr::Known(NodeWithSpan {
+                        node: Box::new(ty),
+                        span: expr.span(),
+                    })
                 } else {
-                    match IntegerTypeNode::try_from_name(lit.suffix()) {
-                        Some(ty) => NodePtr::Known(NodeWithSpan {
-                            node: Box::new(ty),
-                            span: expr.span(),
-                        }),
-                        None => {
-                            emit_error!(
-                                lit.span(),
-                                "invalid integer literal suffix `{}`",
-                                lit.suffix()
-                            );
-                            NodePtr::Inconsistent
-                        }
-                    }
+                    emit_error!(
+                        lit.span(),
+                        "invalid integer literal suffix `{}`",
+                        lit.suffix()
+                    );
+                    NodePtr::Inconsistent
                 };
 
-                match lit.base10_parse::<u128>() {
-                    Ok(value) => TypedValue {
-                        value: Value::Integer {
-                            absolute_value: value,
-                            negated: false,
-                            span: lit.span(),
-                        },
-                        ty: type_ptr!(expr => {integer} #integer_type),
+                let Ok(value) = lit.base10_parse::<u128>() else {
+                    emit_error!(lit.span(), "too large integer");
+                    return TypedValue::inconsistent();
+                };
+
+                TypedValue {
+                    value: Value::Integer {
+                        absolute_value: value,
+                        negated: false,
+                        span: lit.span(),
                     },
-                    Err(_) => {
-                        emit_error!(lit.span(), "too large integer");
-                        TypedValue::inconsistent()
-                    }
+                    ty: type_ptr!(expr => {integer} #integer_type),
                 }
             }
 
@@ -361,13 +362,10 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                 write!(path_str, "{}", segment.ident).unwrap();
             }
 
-            match get_constant(&path_str, expr.span()) {
-                Some(ty_val) => ty_val,
-                None => {
-                    emit_error!(expr, "unsupported path `{}`\n`h` is not a full-blown interpreter; only certain constants are supported", path_str);
-                    TypedValue::inconsistent()
-                }
-            }
+            get_constant(&path_str, expr.span()).unwrap_or_else(|| {
+                emit_error!(expr, "unsupported path `{}`\n`h` is not a full-blown interpreter; only certain constants are supported", path_str);
+                TypedValue::inconsistent()
+            })
         }
 
         syn::Expr::Reference(expr) => {

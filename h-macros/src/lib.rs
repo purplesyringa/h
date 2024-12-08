@@ -1,3 +1,6 @@
+#![allow(clippy::std_instead_of_alloc, reason = "we're not in #[no_std]")]
+#![allow(clippy::wildcard_enum_match_arm, reason = "too many false positives")]
+
 mod codegen;
 mod coding;
 mod constants;
@@ -86,13 +89,13 @@ fn hash_keys<'a>(
         .into_iter()
         .enumerate()
         .map(move |(i, data)| EncodedValue {
-            ty: key_type.clone(),
+            ty: Rc::clone(&key_type),
             data,
             tokens: keys.clone().nth(i).to_token_stream(),
         }))
 }
 
-fn set_dummy_with_ty(ty: TokenStream) {
+fn set_dummy_with_ty(ty: &TokenStream) {
     // Stupid-ass warnings
     set_dummy(quote! {
         if false {
@@ -112,15 +115,16 @@ fn set_dummy_with_ty(ty: TokenStream) {
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    set_dummy_with_ty(quote!(::h::Map<_, _>));
+    set_dummy_with_ty(&quote!(::h::Map<_, _>));
 
     let input = parse_macro_input!(item as parse::WithContext<parse::MapArm>);
 
-    let key_type = match &input.context.key_type {
-        Some(ty) => ty.to_token_stream(),
-        None => quote!(_),
+    let key_type = if let Some(ty) = &input.context.key_type {
+        ty.to_token_stream()
+    } else {
+        quote!(_)
     };
-    set_dummy_with_ty(quote!(::h::Map<#key_type, _>));
+    set_dummy_with_ty(&quote!(::h::Map<#key_type, _>));
 
     let Ok(keys) = hash_keys(&input.context, input.elements.iter().map(|arm| &arm.key)) else {
         return quote! {}.into();
