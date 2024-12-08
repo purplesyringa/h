@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/purplesyringa/h"
 readme = "README.md"
 keywords = ["perfect", "hashing", "phf"]
-categories = ["data-structures", "no-std"]
+categories = ["data-structures", "no-std", "no-std::no-alloc"]
 edition = "2021"
 
 [dependencies]
