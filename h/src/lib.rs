@@ -53,7 +53,29 @@ extern crate self as h;
 pub use h_bare::*;
 
 #[cfg(feature = "macros")]
-pub use h_macros::map;
+#[doc(hidden)]
+pub use h_macros;
+
+// Two reasons for `macro_rules!` instead of a direct reexport:
+// 1. Document the accepted syntax.
+// 2. Pass `$crate` to the macro.
+#[cfg(feature = "macros")]
+#[macro_export]
+macro_rules! map {
+	(
+		for $key_type:ty;
+		$($key:expr => $value:expr),* $(,)?
+	) => {
+		$crate::h_macros::map!(crate $crate; for $key_type; $($key => $value,)*)
+	};
+
+	(
+		$($key:expr => $value:expr),* $(,)?
+	) => {
+		$crate::h_macros::map!(crate $crate; $($key => $value,)*)
+	};
+}
+
 // #[cfg(feature = "macros")]
 // pub use h_macros::phf;
 // #[cfg(feature = "macros")]

@@ -1,7 +1,7 @@
 use syn::{
     parse::{Parse, ParseStream, Result},
     punctuated::Punctuated,
-    Expr, Token, Type,
+    Expr, Path, Token, Type,
 };
 
 #[derive(Debug)]
@@ -21,11 +21,20 @@ impl Parse for MapArm {
 
 #[derive(Debug)]
 pub struct Context {
+    pub h_crate: Option<Path>,
     pub key_type: Option<Type>,
 }
 
 impl Parse for Context {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let h_crate = if input.parse::<Token![crate]>().is_ok() {
+            let path = input.parse::<Path>()?;
+            input.parse::<Token![;]>()?;
+            Some(path)
+        } else {
+            None
+        };
+
         let key_type = if input.parse::<Token![for]>().is_ok() {
             let ty = input.parse::<Type>()?;
             input.parse::<Token![;]>()?;
@@ -33,7 +42,8 @@ impl Parse for Context {
         } else {
             None
         };
-        Ok(Self { key_type })
+
+        Ok(Self { h_crate, key_type })
     }
 }
 

@@ -139,7 +139,13 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         )
         .collect(),
     );
-    let map = CodeGenerator::new().generate(&map);
+
+    let mut gen = CodeGenerator::new();
+    if let Some(path) = input.context.h_crate {
+        gen.set_crate("h", path.into_token_stream());
+    }
+
+    let map = gen.generate(&map);
     quote! {{
         let map: ::h::Map<#key_type, _> = #map;
         map
