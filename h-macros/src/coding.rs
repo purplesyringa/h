@@ -7,12 +7,8 @@ use super::{
     types::{IntegerTypeNode, TypeNode, TypePtr},
     values::Value,
 };
-use byteorder::{NativeEndian as NE, ReadBytesExt, WriteBytesExt};
-use core::hash::Hasher;
-use h::hash::PortableHash;
-use proc_macro2::TokenStream;
+use byteorder::{NativeEndian as NE, WriteBytesExt};
 use proc_macro_error2::emit_error;
-use std::rc::Rc;
 
 struct State {
     data: Vec<u8>,
@@ -117,64 +113,4 @@ pub fn encode_value(value: &Value, ty: &TypePtr) -> (Vec<u8>, bool) {
     };
     state.encode_value_to(value, ty);
     (state.data, !state.had_error)
-}
-
-fn hash<H: Hasher>(data: &mut &[u8], ty: &TypePtr, state: &mut H) {
-    match ty.unwrap_ref() {
-        TypeNode::Integer(integer_type_node) => match integer_type_node.unwrap_ref() {
-            IntegerTypeNode::U8 => data.read_u8().unwrap().hash(state),
-            IntegerTypeNode::U16 => data.read_u16::<NE>().unwrap().hash(state),
-            IntegerTypeNode::U32 => data.read_u32::<NE>().unwrap().hash(state),
-            IntegerTypeNode::U64 => data.read_u64::<NE>().unwrap().hash(state),
-            IntegerTypeNode::U128 => data.read_u128::<NE>().unwrap().hash(state),
-            IntegerTypeNode::I8 => data.read_i8().unwrap().hash(state),
-            IntegerTypeNode::I16 => data.read_i16::<NE>().unwrap().hash(state),
-            IntegerTypeNode::I32 => data.read_i32::<NE>().unwrap().hash(state),
-            IntegerTypeNode::I64 => data.read_i64::<NE>().unwrap().hash(state),
-            IntegerTypeNode::I128 => data.read_i128::<NE>().unwrap().hash(state),
-        },
-
-        TypeNode::Bool => (data.read_u8().unwrap() != 0).hash(state),
-
-        TypeNode::Char => char::from_u32(data.read_u32::<NE>().unwrap())
-            .unwrap()
-            .hash(state),
-
-        TypeNode::Reference(ty) => hash(data, ty, state),
-
-        TypeNode::Array(ty) | TypeNode::Slice(ty) => {
-            let count: usize = data.read_u64::<NE>().unwrap().try_into().unwrap();
-            for _ in 0..count {
-                hash(data, ty, state);
-            }
-        }
-
-        TypeNode::Tuple(tys) => {
-            for ty in tys {
-                hash(data, ty, state);
-            }
-        }
-
-        TypeNode::Str => {
-            let len = data.read_u64::<NE>().unwrap().try_into().unwrap();
-            core::str::from_utf8(&data[..len]).unwrap().hash(state);
-            hash(data, ty, state);
-            *data = &data[len..];
-        }
-
-        TypeNode::Never => unreachable!(),
-    }
-}
-
-pub struct EncodedValue {
-    pub ty: Rc<TypePtr>,
-    pub data: Vec<u8>,
-    pub tokens: TokenStream,
-}
-
-impl PortableHash for EncodedValue {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut cursor = &*self.data;
-        hash(&mut cursor, &self.ty, state);
-    }
 }

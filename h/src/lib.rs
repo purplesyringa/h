@@ -95,10 +95,10 @@ mod tests {
 
     #[test]
     fn macros() {
-        let phf: Map<u64, usize> = map! {
-            for u64;
-            123 => 0,
-            456 => 1,
+        let phf: Map<_, usize> = map! {
+            for &u64;
+            &123 => 0,
+            &456 => 1,
         };
         assert_eq!(phf.get(&123), Some(&0));
         assert_eq!(phf.get(&456), Some(&1));

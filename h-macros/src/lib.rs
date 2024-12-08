@@ -4,26 +4,33 @@
 mod codegen;
 mod coding;
 mod constants;
+mod hashing;
 mod parse;
 mod types;
 mod values;
 
-use codegen::PassThrough;
-use coding::{encode_value, EncodedValue};
-use h::codegen::CodeGenerator;
+use self::{
+    codegen::PassThrough,
+    coding::encode_value,
+    hashing::{with_hashable_keys, Callback},
+    parse::{Context, MapArm, WithContext},
+    types::TypePtr,
+    values::{evaluate_syn_expr, TypedValue, Value},
+};
+use h::{
+    codegen::{CodeGenerator, Codegen},
+    hash::PortableHash,
+};
 use proc_macro2::TokenStream;
 use proc_macro_error2::{emit_call_site_error, emit_error, set_dummy};
 use quote::{quote, ToTokens};
 use std::collections::HashMap;
-use std::rc::Rc;
 use syn::{parse_macro_input, Expr};
-use types::TypePtr;
-use values::{evaluate_syn_expr, TypedValue, Value};
 
-fn hash_keys<'a>(
-    context: &parse::Context,
+fn parse_keys<'a>(
+    context: &Context,
     keys: impl Iterator<Item = &'a Expr> + Clone,
-) -> Result<impl Iterator<Item = EncodedValue>, ()> {
+) -> Result<(TypePtr, Vec<Vec<u8>>), ()> {
     let mut key_type = if let Some(ref ty) = context.key_type {
         TypePtr::from_syn_type(ty)
     } else {
@@ -84,15 +91,7 @@ fn hash_keys<'a>(
         }
     }
 
-    let key_type = Rc::new(key_type);
-    Ok(encoded_keys
-        .into_iter()
-        .enumerate()
-        .map(move |(i, data)| EncodedValue {
-            ty: Rc::clone(&key_type),
-            data,
-            tokens: keys.clone().nth(i).to_token_stream(),
-        }))
+    Ok((key_type, encoded_keys))
 }
 
 fn set_dummy_with_ty(ty: &TokenStream) {
@@ -117,7 +116,7 @@ fn set_dummy_with_ty(ty: &TokenStream) {
 pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     set_dummy_with_ty(&quote!(::h::Map<_, _>));
 
-    let input = parse_macro_input!(item as parse::WithContext<parse::MapArm>);
+    let input = parse_macro_input!(item as WithContext<MapArm>);
 
     let key_type = if let Some(ty) = &input.context.key_type {
         ty.to_token_stream()
@@ -126,29 +125,58 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
     set_dummy_with_ty(&quote!(::h::Map<#key_type, _>));
 
-    let Ok(keys) = hash_keys(&input.context, input.elements.iter().map(|arm| &arm.key)) else {
+    let Ok((inferred_key_type, encoded_keys)) =
+        parse_keys(&input.context, input.elements.iter().map(|arm| &arm.key))
+    else {
         return quote! {}.into();
     };
 
-    let map: h::Map<EncodedValue, PassThrough> = h::Map::from_entries(
-        keys.zip(
-            input
-                .elements
-                .iter()
-                .map(|arm| PassThrough(arm.value.to_token_stream())),
-        )
-        .collect(),
-    );
-
-    let mut gen = CodeGenerator::new();
-    if let Some(path) = input.context.h_crate {
-        gen.set_crate("h", path.into_token_stream());
+    struct Cb<'a> {
+        input: &'a WithContext<MapArm>,
+        key_type: TokenStream,
     }
 
-    let map = gen.generate(&map);
-    quote! {{
-        let map: ::h::Map<#key_type, _> = #map;
-        map
-    }}
+    impl Callback for Cb<'_> {
+        type Output = TokenStream;
+
+        fn call_once<Key: PortableHash + Codegen>(
+            self,
+            keys: impl Iterator<Item = Key>,
+        ) -> TokenStream {
+            let Self { input, key_type } = self;
+
+            let map: h::Map<Key, PassThrough> = h::Map::from_entries(
+                keys.zip(
+                    input
+                        .elements
+                        .iter()
+                        .map(|arm| PassThrough(arm.value.to_token_stream())),
+                )
+                .collect(),
+            );
+
+            let mut gen = CodeGenerator::new();
+            if let Some(path) = &input.context.h_crate {
+                gen.set_crate("h", path.to_token_stream());
+            }
+
+            let map = gen.generate(&map);
+            quote! {{
+                let map: ::h::Map<#key_type, _> = #map;
+                map
+            }}
+        }
+    }
+
+    with_hashable_keys(
+        encoded_keys
+            .into_iter()
+            .zip(input.elements.iter().map(|arm| arm.key.to_token_stream())),
+        &inferred_key_type,
+        Cb {
+            input: &input,
+            key_type,
+        },
+    )
     .into()
 }
