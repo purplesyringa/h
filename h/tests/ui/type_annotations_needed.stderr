@@ -1,40 +1,23 @@
 error: type annotations needed
        specify the key type manually by elaborating the `for {integer};` annotation
        note: integer sizes need to be specified exactly
- --> tests/ui/type_annotations_needed.rs:2:16
+ --> tests/ui/type_annotations_needed.rs:3:13
   |
-2 |       let meow = h::map! {
-  |  ________________^
-3 | |         for _;
-4 | |         0 => (),
-5 | |     };
-  | |_____^
-  |
-  = note: this error originates in the macro `$crate::h_macros::map` which comes from the expansion of the macro `h::map` (in Nightly builds, run with -Z macro-backtrace for more info)
+3 |         for _;
+  |             ^
 
 error: type annotations needed
        specify the key type manually by elaborating the `for (i32, {integer});` annotation
        note: integer sizes need to be specified exactly
-  --> tests/ui/type_annotations_needed.rs:7:15
-   |
-7  |       let nya = h::map! {
-   |  _______________^
-8  | |         for (i32, _);
-9  | |         (0, 1) => (),
-10 | |     };
-   | |_____^
-   |
-   = note: this error originates in the macro `$crate::h_macros::map` which comes from the expansion of the macro `h::map` (in Nightly builds, run with -Z macro-backtrace for more info)
+ --> tests/ui/type_annotations_needed.rs:8:13
+  |
+8 |         for (i32, _);
+  |             ^^^^^^^^
 
 error: type annotations needed
        specify the key type manually by prepending `for {integer};` to the macro input
        note: integer sizes need to be specified exactly
-  --> tests/ui/type_annotations_needed.rs:12:16
+  --> tests/ui/type_annotations_needed.rs:13:9
    |
-12 |       let mrrp = h::map! {
-   |  ________________^
-13 | |         0 => (),
-14 | |     };
-   | |_____^
-   |
-   = note: this error originates in the macro `$crate::h_macros::map` which comes from the expansion of the macro `h::map` (in Nightly builds, run with -Z macro-backtrace for more info)
+13 |         0 => (),
+   |         ^

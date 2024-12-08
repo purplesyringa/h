@@ -54,8 +54,10 @@ fn parse_keys<'a>(
     }
 
     if key_type.has_infer() {
-        if context.key_type.is_some() {
-            emit_call_site_error!("type annotations needed\nspecify the key type manually by elaborating the `for {};` annotation\nnote: integer sizes need to be specified exactly", key_type);
+        if let Some(syn_key_type) = &context.key_type {
+            emit_error!(syn_key_type, "type annotations needed\nspecify the key type manually by elaborating the `for {};` annotation\nnote: integer sizes need to be specified exactly", key_type);
+        } else if let Some(key) = keys.clone().next() {
+            emit_error!(key, "type annotations needed\nspecify the key type manually by prepending `for {};` to the macro input\nnote: integer sizes need to be specified exactly", key_type);
         } else {
             emit_call_site_error!("type annotations needed\nspecify the key type manually by prepending `for {};` to the macro input\nnote: integer sizes need to be specified exactly", key_type);
         }
