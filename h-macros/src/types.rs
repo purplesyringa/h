@@ -410,7 +410,7 @@ impl TypePtr {
                 if let Some(node) = ty.path.get_ident().and_then(TypeNode::try_from_ident) {
                     node
                 } else {
-                    emit_error!(ty, "unknown type name");
+                    emit_error!(ty, "unknown type name\n`h` macros do not understand manually declared types, use `h::codegen` instead");
                     return NodePtr::Inconsistent;
                 }
             }
