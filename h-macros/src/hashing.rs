@@ -48,7 +48,6 @@ fn hash<H: Hasher>(data: &mut &[u8], ty: &TypePtr, state: &mut H) {
         TypeNode::Str => {
             let len = data.read_u64::<NE>().unwrap().try_into().unwrap();
             core::str::from_utf8(&data[..len]).unwrap().hash(state);
-            hash(data, ty, state);
             *data = &data[len..];
         }
 
