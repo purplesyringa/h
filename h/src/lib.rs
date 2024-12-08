@@ -53,7 +53,4 @@ extern crate self as h;
 pub use h_bare::*;
 
 #[cfg(feature = "macros")]
-mod macros;
-
-#[cfg(feature = "macros")]
-pub use macros::*;
+pub mod macros;

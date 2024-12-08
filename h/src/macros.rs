@@ -1,3 +1,21 @@
+//! Macros for compile time generation.
+//!
+//! Unlike [`Map::from_entries`] and similar methods, these macros are zero-cost in runtime. Use
+//! them whenever the keys are fixed, can be embedded in the source code, and are of simple types.
+//!
+//!
+//! # Types
+//!
+//! Simple types include:
+//!
+//! - Integers, `str`, `bool`, `char`
+//! - References, tuples, arrays, and slices to/of the above, including recursion
+//!
+//! Notably, this does not include most types provided by `std` or the user. If such a key type
+//! needs to be used, use [`codegen`] instead of macros.
+//!
+//! This limitation applies only to keys of [`Map`]s and values of [`Set`]s and [`Phf`]s. Notably,
+//! it doesn't apply to values of [`Map`]s, as the values don't need to be analyzed in compile time.
 use super::*;
 
 #[doc(hidden)]
@@ -9,15 +27,15 @@ pub use h_macros;
 
 /// Create a [`Map`]() in compile time.
 ///
-/// Unlike [`Map::from_entries`], this macro is zero-cost in runtime. Use it whenever the keys are
-/// fixed and can be embedded in the source code (otherwise, use [`codegen`]).
+/// See [module-level documentation](self) for more information.
+///
 ///
 /// # Example
 ///
-/// Most maps should be put in a `const`:
+/// [`map!`] usually returns a reference to a map. Most maps should be put in a `const`:
 ///
 /// ```rust
-/// const MAP: h::Map<&str, i32> = h::map! {
+/// const MAP: &h::Map<&str, i32> = h::map! {
 ///     "hello" => 1,
 ///     "world" => 2,
 /// };
@@ -27,8 +45,15 @@ pub use h_macros;
 /// assert_eq!(MAP.get("other"), None);
 /// ```
 ///
-/// Alternatively, if you have values that, for some reason, need to be initialized in runtime, you
-/// can use `let` or [`LazyLock`](std::sync::LazyLock), just like you would with `std` types:
+///
+/// # Mutability
+///
+/// Sometimes you have values that need to be initialized or even mutated in runtime. In this case,
+/// add `mut;` to the beginning of the macro arguments. This enables the macro to return [`Map`]
+/// instead of `&Map`.
+///
+/// You can now put the map in a `let`/`let mut` binding or initialize it in a `const` with
+/// [`LazyLock`](std::sync::LazyLock):
 ///
 /// ```rust
 /// use std::sync::Mutex;
@@ -44,8 +69,25 @@ pub use h_macros;
 /// assert_eq!(*guard, 1);
 /// ```
 ///
-/// Here, `mut;` indicates that the values are constructed outside the `const` context. If you omit
-/// `mut;`, you might see errors like "temporary value dropped while borrowed".
+/// ```rust
+/// let mut map = h::map! {
+///     mut;
+///     "hello" => 1,
+///     "world" => 2,
+/// };
+///
+/// assert_eq!(map.get_mut("hello"), Some(&mut 1));
+/// ```
+///
+/// `mut;` does not work in a `const` context.
+///
+/// If you accidentally omit `mut;`, you might see errors like:
+///
+/// > temporary value dropped while borrowed
+///
+/// or:
+///
+/// > cannot borrow `*map` as mutable, as it is behind a `&` reference
 #[cfg(doc)]
 #[macro_export]
 macro_rules! map {
@@ -64,19 +106,14 @@ macro_rules! map {
 #[macro_export]
 macro_rules! map {
 	($($tt:tt)*) => {
-		$crate::h_macros::map!(crate $crate; $($tt)*)
+		$crate::macros::h_macros::map!(crate $crate; $($tt)*)
 	};
 }
 
+pub use map;
+
 // pub use h_macros::phf;
 // pub use h_macros::set;
-
-#[must_use]
-#[doc(hidden)]
-#[inline]
-pub fn conjure<T>() -> T {
-    unreachable!();
-}
 
 #[cfg(test)]
 mod tests {
@@ -84,14 +121,14 @@ mod tests {
 
     #[test]
     fn macros() {
-        let map: h::Map<_, usize> = map! {
-            for &u64;
-            &123 => 0,
-            &456 => 1,
+        const MAP: &h::Map<u64, usize> = map! {
+            for u64;
+            123 => 0,
+            456 => 1,
         };
-        assert_eq!(map.get(&123), Some(&0));
-        assert_eq!(map.get(&456), Some(&1));
-        assert_eq!(map.get(&789), None);
+        assert_eq!(MAP.get(&123), Some(&0));
+        assert_eq!(MAP.get(&456), Some(&1));
+        assert_eq!(MAP.get(&789), None);
 
         let map = h::map! {
             mut;

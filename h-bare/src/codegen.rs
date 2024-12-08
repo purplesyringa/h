@@ -139,10 +139,9 @@ impl CodeGenerator {
 
         quote!(
             {
-                let __codegen_value = #value;
                 #extern_crate_alloc
                 #(#uses)*
-                __codegen_value
+                #value
             }
         )
     }

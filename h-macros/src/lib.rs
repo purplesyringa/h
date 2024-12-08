@@ -100,9 +100,12 @@ fn set_dummy_with_ty(ty: &TokenStream) {
         }
 
         macro_rules! unimplemented {
-            () => {
-                ::h::conjure::<#ty>()
-            };
+            () => {{
+                fn conjure<T>() -> T {
+                    unreachable!();
+                }
+                conjure::<#ty>()
+            }};
         }
     });
 }
@@ -167,11 +170,27 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
             }
             gen.set_mutability(input.context.mutability);
 
-            let map = gen.generate(&map);
-            quote! {{
-                let map: ::h::Map<#key_type, _> = #map;
+            struct Ascribe<T> {
+                map: T,
+                key_type: TokenStream,
+            }
+
+            impl<T: Codegen> Codegen for Ascribe<T> {
+                fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+                    let identity = gen.path("core::convert::identity");
+                    let map = gen.path("h::Map");
+                    let key_type = &self.key_type;
+                    let value = gen.piece(&self.map);
+                    quote!(#identity::<#map<#key_type, _>>(#value))
+                }
+            }
+
+            let map = gen.generate(&Ascribe { map, key_type });
+            if input.context.mutability {
                 map
-            }}
+            } else {
+                quote!(&#map)
+            }
         }
     }
 
