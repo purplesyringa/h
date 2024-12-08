@@ -1,7 +1,6 @@
 #![allow(clippy::std_instead_of_alloc, reason = "we're not in #[no_std]")]
 #![allow(clippy::wildcard_enum_match_arm, reason = "too many false positives")]
 
-mod codegen;
 mod coding;
 mod constants;
 mod hashing;
@@ -10,7 +9,6 @@ mod types;
 mod values;
 
 use self::{
-    codegen::PassThrough,
     coding::encode_value,
     hashing::{with_hashable_keys, Callback},
     parse::{Context, MapArm, WithContext},
@@ -107,6 +105,14 @@ fn set_dummy_with_ty(ty: &TokenStream) {
             };
         }
     });
+}
+
+struct PassThrough(TokenStream);
+
+impl Codegen for PassThrough {
+    fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
+        self.0.clone()
+    }
 }
 
 // This option does not enable the `proc_macro_hack` crate. It only tweaks the error output to be
