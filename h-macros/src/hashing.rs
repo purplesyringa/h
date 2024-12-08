@@ -84,7 +84,7 @@ pub trait Callback {
 
     fn call_once<Key: PortableHash + Codegen>(
         self,
-        keys: impl Iterator<Item = Key>,
+        keys: impl ExactSizeIterator<Item = Key> + Clone,
     ) -> Self::Output;
 }
 
@@ -92,7 +92,7 @@ pub trait Callback {
 ///
 /// `keys` must be encoded variants of `T`, where `T` is a primitive.
 unsafe fn with_primitive<T: PortableHash + Codegen, Cb: Callback>(
-    keys: impl Iterator<Item = (Vec<u8>, TokenStream)>,
+    keys: impl ExactSizeIterator<Item = (Vec<u8>, TokenStream)> + Clone,
     cb: Cb,
     add_reference: bool,
 ) -> Cb::Output {
@@ -107,7 +107,7 @@ unsafe fn with_primitive<T: PortableHash + Codegen, Cb: Callback>(
 }
 
 fn with_integer_keys<Cb: Callback>(
-    keys: impl Iterator<Item = (Vec<u8>, TokenStream)>,
+    keys: impl ExactSizeIterator<Item = (Vec<u8>, TokenStream)> + Clone,
     key_type: IntegerTypeNode,
     cb: Cb,
     add_reference: bool,
@@ -127,7 +127,7 @@ fn with_integer_keys<Cb: Callback>(
 }
 
 pub fn with_hashable_keys<Cb: Callback>(
-    keys: impl Iterator<Item = (Vec<u8>, TokenStream)>,
+    keys: impl ExactSizeIterator<Item = (Vec<u8>, TokenStream)> + Clone,
     key_type: &TypePtr,
     cb: Cb,
 ) -> Cb::Output {

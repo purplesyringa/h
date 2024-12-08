@@ -52,7 +52,7 @@ pub use h_macros;
 // 1. Document the accepted syntax.
 // 2. Pass `$crate` to the macro.
 
-/// Create a [`Map`]() in compile time.
+/// Create a [`Map`] in compile time.
 ///
 /// See [module-level documentation](self) for more information.
 ///
@@ -120,10 +120,66 @@ pub use h_macros;
 macro_rules! map {
     // Not actually valid/usable macro rules, but close enough for docs.
     (
-		$(for $key_type:ty;)?
-		$(mut;)?
-		$($key:expr => $value:expr),* $(,)?
-	) => {
+        $(for $key_type:ty;)?
+        $(mut;)?
+        $($key:expr => $value:expr),* $(,)?
+    ) => {
+        // Doesn't need to typecheck, but needs to parse.
+        ()
+    };
+}
+
+/// Create a [`Set`] in compile time.
+///
+/// See [module-level documentation](self) for more information.
+///
+///
+/// # Example
+///
+/// [`set!`] returns a reference to a set. Sets should be put in a `const`:
+///
+/// ```rust
+/// const SET: &h::Set<&str> = h::set!("hello", "world");
+///
+/// assert!(SET.contains("hello"));
+/// assert!(SET.contains("world"));
+/// assert!(!SET.contains("other"));
+/// ```
+#[cfg(doc)]
+#[macro_export]
+macro_rules! set {
+    // Not actually valid/usable macro rules, but close enough for docs.
+    (
+        $(for $element_type:ty;)?
+        $($element:expr),* $(,)?
+    ) => {
+        // Doesn't need to typecheck, but needs to parse.
+        ()
+    };
+}
+
+/// Create a [`Phf`] in compile time.
+///
+/// See [module-level documentation](self) for more information.
+///
+///
+/// # Example
+///
+/// [`phf!`] returns a reference to a PHF. PHFs should be put in a `const`:
+///
+/// ```rust
+/// const PHF: &h::Phf<&str> = h::phf!("hello", "world");
+///
+/// assert_ne!(PHF.hash("hello"), PHF.hash("world"));
+/// ```
+#[cfg(doc)]
+#[macro_export]
+macro_rules! phf {
+    // Not actually valid/usable macro rules, but close enough for docs.
+    (
+        $(for $key_type:ty;)?
+        $($key:expr),* $(,)?
+    ) => {
         // Doesn't need to typecheck, but needs to parse.
         ()
     };
@@ -132,15 +188,30 @@ macro_rules! map {
 #[cfg(not(doc))]
 #[macro_export]
 macro_rules! map {
-	($($tt:tt)*) => {
-		$crate::macros::h_macros::map!(crate $crate; $($tt)*)
-	};
+    ($($tt:tt)*) => {
+        $crate::macros::h_macros::map!(crate $crate; $($tt)*)
+    };
+}
+
+#[cfg(not(doc))]
+#[macro_export]
+macro_rules! set {
+    ($($tt:tt)*) => {
+        $crate::macros::h_macros::set!(crate $crate; $($tt)*)
+    };
+}
+
+#[cfg(not(doc))]
+#[macro_export]
+macro_rules! phf {
+    ($($tt:tt)*) => {
+        $crate::macros::h_macros::phf!(crate $crate; $($tt)*)
+    };
 }
 
 pub use map;
-
-// pub use h_macros::phf;
-// pub use h_macros::set;
+pub use phf;
+pub use set;
 
 #[cfg(test)]
 mod tests {
@@ -166,6 +237,14 @@ mod tests {
         let mutex = map.get("hello").unwrap();
         let guard = mutex.lock().unwrap();
         assert_eq!(*guard, 1);
+
+        const SET: &h::Set<u64> = set!(for u64; 123, 456);
+        assert!(SET.contains(&123));
+        assert!(SET.contains(&456));
+        assert!(!SET.contains(&789));
+
+        const PHF: &h::Phf<u64> = phf!(for u64; 123, 456);
+        assert_ne!(PHF.hash(&123), PHF.hash(&456));
     }
 
     #[test]

@@ -120,8 +120,43 @@ impl Codegen for PassThrough {
     }
 }
 
-// This option does not enable the `proc_macro_hack` crate. It only tweaks the error output to be
-// valid in expression position.
+struct Ascribe<T> {
+    value: T,
+    ty: TokenStream,
+}
+
+impl<T: Codegen> Codegen for Ascribe<T> {
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let value = gen.piece(&self.value);
+        let identity = gen.path("core::convert::identity");
+        let ty = &self.ty;
+        quote!(#identity::<#ty>(#value))
+    }
+}
+
+fn generate<T: Codegen>(
+    context: &Context,
+    value: T,
+    ty: impl FnOnce(&mut CodeGenerator) -> TokenStream,
+) -> TokenStream {
+    let mut gen = CodeGenerator::new();
+    if let Some(path) = &context.h_crate {
+        gen.set_crate("h", path.to_token_stream());
+    }
+    gen.set_mutability(context.mutability.is_some());
+
+    let ty = ty(&mut gen);
+    let value = gen.generate(&Ascribe { value, ty });
+    if context.mutability.is_some() {
+        value
+    } else {
+        quote!(&#value)
+    }
+}
+
+// `proc_macro_error(proc_macro_hack)` does not enable the `proc_macro_hack` crate. It only tweaks
+// the error output to be valid in expression position.
+
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -154,45 +189,23 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
             self,
             keys: impl Iterator<Item = Key>,
         ) -> TokenStream {
-            let Self { input, key_type } = self;
-
-            let map: h::Map<Key, PassThrough> = h::Map::from_entries(
-                keys.zip(
-                    input
-                        .elements
-                        .iter()
-                        .map(|arm| PassThrough(arm.value.to_token_stream())),
-                )
-                .collect(),
-            );
-
-            let mut gen = CodeGenerator::new();
-            if let Some(path) = &input.context.h_crate {
-                gen.set_crate("h", path.to_token_stream());
-            }
-            gen.set_mutability(input.context.mutability);
-
-            struct Ascribe<T> {
-                map: T,
-                key_type: TokenStream,
-            }
-
-            impl<T: Codegen> Codegen for Ascribe<T> {
-                fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
-                    let identity = gen.path("core::convert::identity");
+            generate(
+                &self.input.context,
+                h::Map::<Key, PassThrough>::from_entries(
+                    keys.zip(
+                        self.input
+                            .elements
+                            .iter()
+                            .map(|arm| PassThrough(arm.value.to_token_stream())),
+                    )
+                    .collect(),
+                ),
+                |gen| {
                     let map = gen.path("h::Map");
-                    let key_type = &self.key_type;
-                    let value = gen.piece(&self.map);
-                    quote!(#identity::<#map<#key_type, _>>(#value))
-                }
-            }
-
-            let map = gen.generate(&Ascribe { map, key_type });
-            if input.context.mutability {
-                map
-            } else {
-                quote!(&#map)
-            }
+                    let key_type = self.key_type;
+                    quote!(#map<#key_type, _>)
+                },
+            )
         }
     }
 
@@ -200,6 +213,126 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         encoded_keys
             .into_iter()
             .zip(input.elements.iter().map(|arm| arm.key.to_token_stream())),
+        &inferred_key_type,
+        Cb {
+            input: &input,
+            key_type,
+        },
+    )
+    .into()
+}
+
+#[proc_macro_error2::proc_macro_error(proc_macro_hack)]
+#[proc_macro]
+pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    set_dummy_with_ty(&quote!(::h::Set<_>));
+
+    let input = parse_macro_input!(item as WithContext<Expr>);
+
+    if let Some(token) = &input.context.mutability {
+        emit_error!(token, "`mut;` is not supported on sets");
+    }
+
+    let element_type = if let Some(ty) = &input.context.key_type {
+        ty.to_token_stream()
+    } else {
+        quote!(_)
+    };
+    set_dummy_with_ty(&quote!(::h::Set<#element_type>));
+
+    let Ok((inferred_element_type, encoded_elements)) =
+        parse_keys(&input.context, input.elements.iter())
+    else {
+        return quote! {}.into();
+    };
+
+    struct Cb<'a> {
+        input: &'a WithContext<Expr>,
+        element_type: TokenStream,
+    }
+
+    impl Callback for Cb<'_> {
+        type Output = TokenStream;
+
+        fn call_once<Element: PortableHash + Codegen>(
+            self,
+            elements: impl Iterator<Item = Element>,
+        ) -> TokenStream {
+            generate(
+                &self.input.context,
+                h::Set::<Element>::from_elements(elements.collect()),
+                |gen| {
+                    let set_ty = gen.path("h::Set");
+                    let element_type = self.element_type;
+                    quote!(#set_ty<#element_type>)
+                },
+            )
+        }
+    }
+
+    with_hashable_keys(
+        encoded_elements.into_iter().zip(
+            input
+                .elements
+                .iter()
+                .map(|element| element.to_token_stream()),
+        ),
+        &inferred_element_type,
+        Cb {
+            input: &input,
+            element_type,
+        },
+    )
+    .into()
+}
+
+#[proc_macro_error2::proc_macro_error(proc_macro_hack)]
+#[proc_macro]
+pub fn phf(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    set_dummy_with_ty(&quote!(::h::Phf<_>));
+
+    let input = parse_macro_input!(item as WithContext<Expr>);
+
+    if let Some(token) = &input.context.mutability {
+        emit_error!(token, "`mut;` is not supported on PHFs");
+    }
+
+    let key_type = if let Some(ty) = &input.context.key_type {
+        ty.to_token_stream()
+    } else {
+        quote!(_)
+    };
+    set_dummy_with_ty(&quote!(::h::Phf<#key_type>));
+
+    let Ok((inferred_key_type, encoded_keys)) = parse_keys(&input.context, input.elements.iter())
+    else {
+        return quote! {}.into();
+    };
+
+    struct Cb<'a> {
+        input: &'a WithContext<Expr>,
+        key_type: TokenStream,
+    }
+
+    impl Callback for Cb<'_> {
+        type Output = TokenStream;
+
+        fn call_once<Key: PortableHash + Codegen>(
+            self,
+            keys: impl ExactSizeIterator<Item = Key> + Clone,
+        ) -> TokenStream {
+            generate(&self.input.context, h::Phf::<Key>::from_keys(keys), |gen| {
+                let phf_ty = gen.path("h::Phf");
+                let key_type = self.key_type;
+                quote!(#phf_ty<#key_type>)
+            })
+        }
+    }
+
+    with_hashable_keys(
+        encoded_keys
+            .into_iter()
+            .zip(input.elements.iter().map(|key| key.to_token_stream())),
         &inferred_key_type,
         Cb {
             input: &input,
