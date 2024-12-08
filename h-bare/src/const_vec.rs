@@ -76,7 +76,7 @@ impl<T: super::codegen::Codegen> super::codegen::Codegen for ConstVec<T> {
         let const_vec = gen.path("h::low_level::ConstVec");
         let data = gen.piece(&**self);
         if gen.mutability() {
-            let vec = gen.path("alloc::vec::vec");
+            let vec = gen.path("alloc::vec");
             quote::quote!(#const_vec::from(#vec!#data))
         } else {
             quote::quote!(#const_vec::from_static_ref(&#data))
