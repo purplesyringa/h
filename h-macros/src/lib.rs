@@ -165,6 +165,7 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
             if let Some(path) = &input.context.h_crate {
                 gen.set_crate("h", path.to_token_stream());
             }
+            gen.set_mutability(input.context.mutability);
 
             let map = gen.generate(&map);
             quote! {{

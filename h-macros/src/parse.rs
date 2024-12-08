@@ -23,6 +23,7 @@ impl Parse for MapArm {
 pub struct Context {
     pub h_crate: Option<Path>,
     pub key_type: Option<Type>,
+    pub mutability: bool,
 }
 
 impl Parse for Context {
@@ -43,7 +44,18 @@ impl Parse for Context {
             None
         };
 
-        Ok(Self { h_crate, key_type })
+        let mutability = if input.parse::<Token![mut]>().is_ok() {
+            input.parse::<Token![;]>()?;
+            true
+        } else {
+            false
+        };
+
+        Ok(Self {
+            h_crate,
+            key_type,
+            mutability,
+        })
     }
 }
 
