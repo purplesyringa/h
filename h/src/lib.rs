@@ -41,6 +41,12 @@
 
 #![no_std]
 
+// For docs
+#[cfg(feature = "alloc")]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
 extern crate self as h;
 
 #[doc(inline)]
