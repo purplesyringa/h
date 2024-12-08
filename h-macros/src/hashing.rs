@@ -1,3 +1,8 @@
+#![allow(
+    clippy::shadow_unrelated,
+    reason = "https://github.com/rust-lang/rust-clippy/issues/11827"
+)]
+
 use super::types::{IntegerTypeNode, TypeNode, TypePtr};
 use byteorder::{NativeEndian as NE, ReadBytesExt};
 use core::hash::Hasher;

@@ -53,55 +53,7 @@ extern crate self as h;
 pub use h_bare::*;
 
 #[cfg(feature = "macros")]
-#[doc(hidden)]
-pub use h_macros;
-
-// Two reasons for `macro_rules!` instead of a direct reexport:
-// 1. Document the accepted syntax.
-// 2. Pass `$crate` to the macro.
-#[cfg(feature = "macros")]
-#[macro_export]
-macro_rules! map {
-	(
-		for $key_type:ty;
-		$($key:expr => $value:expr),* $(,)?
-	) => {
-		$crate::h_macros::map!(crate $crate; for $key_type; $($key => $value,)*)
-	};
-
-	(
-		$($key:expr => $value:expr),* $(,)?
-	) => {
-		$crate::h_macros::map!(crate $crate; $($key => $value,)*)
-	};
-}
-
-// #[cfg(feature = "macros")]
-// pub use h_macros::phf;
-// #[cfg(feature = "macros")]
-// pub use h_macros::set;
-
-#[must_use]
-#[doc(hidden)]
-#[inline]
-pub fn conjure<T>() -> T {
-    unreachable!();
-}
+mod macros;
 
 #[cfg(feature = "macros")]
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn macros() {
-        let phf: Map<_, usize> = map! {
-            for &u64;
-            &123 => 0,
-            &456 => 1,
-        };
-        assert_eq!(phf.get(&123), Some(&0));
-        assert_eq!(phf.get(&456), Some(&1));
-        assert_eq!(phf.get(&789), None);
-    }
-}
+pub use macros::*;
