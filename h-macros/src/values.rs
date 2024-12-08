@@ -351,7 +351,7 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
             }
 
             let mut path_str = String::new();
-            if !expr.path.leading_colon.is_none() {
+            if expr.path.leading_colon.is_some() {
                 path_str += "::";
             }
             for (i, segment) in expr.path.segments.iter().enumerate() {

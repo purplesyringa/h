@@ -134,7 +134,7 @@ impl<T: Node> NodePtr<T> {
     pub fn unwrap_ref(&self) -> &T {
         match self {
             Self::Infer => panic!("cannot unwrap _ type"),
-            Self::Known(NodeWithSpan { node, .. }) => &*node,
+            Self::Known(NodeWithSpan { node, .. }) => node,
             Self::Inconsistent => panic!("cannot unwrap ? type"),
         }
     }
@@ -162,8 +162,8 @@ impl UnifyError {
         Self {
             type1: node1.node.outer().to_string(),
             type2: node2.node.outer().to_string(),
-            span1: node1.span.clone(),
-            span2: node2.span.clone(),
+            span1: node1.span,
+            span2: node2.span,
         }
     }
 
@@ -454,12 +454,12 @@ impl TypeNode {
             })));
         }
 
-        return Some(match name {
+        Some(match name {
             "bool" => TypeNode::Bool,
             "char" => TypeNode::Char,
             "str" => TypeNode::Str,
             _ => return None,
-        });
+        })
     }
 }
 

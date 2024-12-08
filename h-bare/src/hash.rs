@@ -193,7 +193,7 @@ impl PortableHash for isize {
 impl PortableHash for bool {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u8(*self as u8);
+        state.write_u8(u8::from(*self));
     }
 }
 

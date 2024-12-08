@@ -166,6 +166,6 @@ pub struct EncodedValue {
 impl PortableHash for EncodedValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let mut cursor = &self.data[..];
-        hash(&mut cursor, &*self.ty, state);
+        hash(&mut cursor, &self.ty, state);
     }
 }
