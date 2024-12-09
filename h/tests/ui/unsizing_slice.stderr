@@ -1,0 +1,29 @@
+error: unsupported expression
+       `h` is not a full-blown interpreter; only certain operators are allowed
+ --> tests/ui/unsizing_slice.rs:3:20
+  |
+3 |         &[1, 2, 3][..] => (),
+  |                    ^^
+
+error: indexing is not supported
+       `h` is not a full-blown interpreter
+       to unsize an array, use `as &[_]`
+ --> tests/ui/unsizing_slice.rs:3:10
+  |
+3 |         &[1, 2, 3][..] => (),
+  |          ^^^^^^^^^^^^^
+
+error: unsupported expression
+       `h` is not a full-blown interpreter; only certain operators are allowed
+ --> tests/ui/unsizing_slice.rs:4:17
+  |
+4 |         &b"abc"[..] => (),
+  |                 ^^
+
+error: indexing is not supported
+       `h` is not a full-blown interpreter
+       to unsize an array, use `as &[_]`
+ --> tests/ui/unsizing_slice.rs:4:10
+  |
+4 |         &b"abc"[..] => (),
+  |          ^^^^^^^^^^
