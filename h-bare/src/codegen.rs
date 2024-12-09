@@ -58,20 +58,61 @@ use std::collections::{HashMap, HashSet};
 
 /// Code generator.
 pub struct CodeGenerator {
+    /// Mapping from crate names to paths, as provided with [`set_crate`](Self::set_crate).
     crate_paths: HashMap<String, TokenStream>,
+
+    /// Mapping from paths (as passed to [`path`](Self::path)) to identifiers (as aliased with
+    /// `use {path} as {ident};`).
     path_to_alias: HashMap<String, Ident>,
+
+    /// Identifiers already used for aliases.
     aliases: HashSet<String>,
+
+    /// Whether [`path`](Self::path) has ever been called on an item from the [`alloc`] crate. Used
+    /// to emit an `extern crate alloc as _Alloc;` annotation.
     alloc_wanted: bool,
+
+    /// See [module-level documentation](self).
     mutability: bool,
 }
 
 impl CodeGenerator {
+    /// *This method is a hack to add private documentation to public items.*
+    ///
+    /// We generate code of the following format:
+    ///
+    /// ```rust
+    /// { // wrap in braces to add scope to an expression
+    ///     extern crate alloc as _Alloc; // used for paths within alloc, e.g. `_Alloc::vec::Vec`
+    ///     use ::h::Map as __Map;
+    ///     use ::core::option::Option::Some as __Some;
+    ///     use ::core::option::Option::None as __None;
+    ///     // other imports...
+    ///     {piece} // the code returned by `Codegen::generate_piece`
+    /// }
+    /// ```
+    ///
+    /// There's three things of interest:
+    ///
+    /// 1. Items are imported with `use` and then used by alias instead of directly. This is to
+    ///    reduce the source code size -- no one wants to read `::core::option::Option::` while
+    ///    debugging what went wrong in codegen.
+    ///
+    /// 2. We import items even if they're in prelude and use name mangling to reduce the likelyhood
+    ///    of collisions with user types or aliases.
+    ///
+    /// 3. We use `extern crate alloc`, as `::alloc` is unavailable without special configuration.
+    ///    This statement is only added if `alloc` is actually requested by codegen, as we support
+    ///    no-std/no-alloc environments, too.
+    #[allow(dead_code, clippy::missing_const_for_fn, reason = "docs hack")]
+    fn __private_docs() {}
+
     /// Create a code generator with default settings.
     #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
-            crate_paths: HashMap::from([("h".into(), quote!(::h))]),
+            crate_paths: HashMap::new(),
             path_to_alias: HashMap::new(),
             aliases: HashSet::new(),
             alloc_wanted: false,
@@ -207,6 +248,7 @@ pub trait Codegen {
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream;
 }
 
+/// Implement [`Codegen`] for types by calling methods on [`Literal`].
 macro_rules! literal {
     ($($ty:ty => $method:ident,)*) => {
         $(
@@ -287,9 +329,14 @@ impl<T: ?Sized + Codegen> Codegen for &T {
     }
 }
 
-fn as_byte_slice<T: ?Sized>(object: &T) -> Option<&[u8]> {
+/// If `T` is `[u8]`, returns `Some(value)`. Otherwise, returns `None`.
+///
+/// This is a form of specialization for codegening byte arrays with `b".."` instead of `[..]`.
+fn as_byte_slice<T: ?Sized>(value: &T) -> Option<&[u8]> {
     if typeid::of::<T>() == typeid::of::<[u8]>() {
-        Some(unsafe { core::mem::transmute_copy::<&T, &[u8]>(&object) })
+        // SAFETY: `T` and `[u8]` have the same type ID. `[u8]` doesn't contain lifetimes, so `T`
+        // must be the same type, thus `transmute_copy` is a no-op.
+        Some(unsafe { core::mem::transmute_copy::<&T, &[u8]>(&value) })
     } else {
         None
     }
