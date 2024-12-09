@@ -208,13 +208,13 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
 
             if is_unsizing {
                 emit_error!(
-                    expr.span(),
-                    "indexing is not supported\n`h` is not a full-blown interpreter\nto unsize an array, use `as &[_]`"
+                    expr,
+                    "indexing is not supported\n`h` is not a full-blown interpreter\nto unsize an array, use `as &[_]`",
                 );
             } else {
                 emit_error!(
-                    expr.span(),
-                    "indexing is not supported\n`h` is not a full-blown interpreter"
+                    expr,
+                    "indexing is not supported\n`h` is not a full-blown interpreter",
                 );
             }
 
@@ -240,7 +240,7 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
 
             syn::Lit::CStr(_) => {
                 emit_error!(
-                    expr.span(),
+                    expr,
                     "C-string literals are not supported\n`h` is not a full-blown interpreter",
                 );
                 <&Inconsistent>::as_typed_value(&&Inconsistent, expr.span())
@@ -259,16 +259,12 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                         span: expr.span(),
                     })
                 } else {
-                    emit_error!(
-                        lit.span(),
-                        "invalid integer literal suffix `{}`",
-                        lit.suffix()
-                    );
+                    emit_error!(lit, "invalid integer literal suffix `{}`", lit.suffix());
                     NodePtr::Inconsistent
                 };
 
                 let Ok(value) = lit.base10_parse::<u128>() else {
-                    emit_error!(lit.span(), "too large integer");
+                    emit_error!(lit, "too large integer");
                     return TypedValue::inconsistent();
                 };
 
@@ -283,17 +279,14 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
             }
 
             syn::Lit::Float(_) => {
-                emit_error!(expr.span(), "floating-point numbers cannot be hashed");
+                emit_error!(expr, "floating-point numbers cannot be hashed");
                 TypedValue::inconsistent()
             }
 
             syn::Lit::Bool(lit) => bool::as_typed_value(&lit.value(), expr.span()),
 
             _ => {
-                emit_error!(
-                    expr.span(),
-                    "invalid literal\n`h` is not a full-blown interpreter"
-                );
+                emit_error!(expr, "invalid literal\n`h` is not a full-blown interpreter");
                 TypedValue::inconsistent()
             }
         },
