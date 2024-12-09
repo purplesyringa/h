@@ -271,12 +271,9 @@ pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 
     with_hashable_keys(
-        encoded_elements.into_iter().zip(
-            input
-                .elements
-                .iter()
-                .map(|element| element.to_token_stream()),
-        ),
+        encoded_elements
+            .into_iter()
+            .zip(input.elements.iter().map(Expr::to_token_stream)),
         &inferred_element_type,
         Cb {
             input: &input,
@@ -332,7 +329,7 @@ pub fn phf(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     with_hashable_keys(
         encoded_keys
             .into_iter()
-            .zip(input.elements.iter().map(|key| key.to_token_stream())),
+            .zip(input.elements.iter().map(Expr::to_token_stream)),
         &inferred_key_type,
         Cb {
             input: &input,

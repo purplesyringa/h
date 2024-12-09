@@ -147,6 +147,7 @@ impl AsTypedValue for str {
     }
 }
 
+#[must_use]
 pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
     match expr {
         syn::Expr::Array(expr) => {
@@ -199,7 +200,9 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
         syn::Expr::Group(expr) => evaluate_syn_expr(&expr.expr),
 
         syn::Expr::Index(expr) => {
-            let array = evaluate_syn_expr(&expr.expr);
+            // For diagnostics
+            let _ = evaluate_syn_expr(&expr.expr);
+            let _ = evaluate_syn_expr(&expr.index);
 
             let is_unsizing = matches!(&*expr.index, syn::Expr::Range(range) if range.start.is_none() && range.end.is_none());
 
