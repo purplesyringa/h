@@ -37,7 +37,7 @@ fn hash<H: Hasher>(data: &mut &[u8], ty: &TypePtr, state: &mut H) {
 
         TypeNode::Reference(ty) => hash(data, ty, state),
 
-        TypeNode::Array(ty) | TypeNode::Slice(ty) => {
+        TypeNode::ArrayOrSlice(ty) => {
             let count: usize = data.read_u64::<NE>().unwrap().try_into().unwrap();
             for _ in 0..count {
                 hash(data, ty, state);

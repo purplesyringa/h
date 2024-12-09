@@ -83,7 +83,7 @@ impl State {
 
             (Value::Reference(value), TypeNode::Reference(ty)) => self.encode_value_to(value, ty),
 
-            (Value::ArrayOrSlice(elems), TypeNode::Array(ty) | TypeNode::Slice(ty)) => {
+            (Value::ArrayOrSlice(elems), TypeNode::ArrayOrSlice(ty)) => {
                 self.data.write_u64::<NE>(elems.len() as u64).unwrap();
                 for elem in elems {
                     self.encode_value_to(elem, ty);

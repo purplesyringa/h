@@ -169,14 +169,14 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                 .collect();
             TypedValue {
                 value: Value::ArrayOrSlice(values),
-                ty: type_ptr!(expr => array [#unified_ty]),
+                ty: type_ptr!(expr => [#unified_ty]),
             }
         }
 
         syn::Expr::Cast(expr) => {
             let TypedValue {
                 mut value,
-                ty: mut ty_from,
+                ty: ty_from,
             } = evaluate_syn_expr(&expr.expr);
             let mut ty_to = TypePtr::from_syn_type(&expr.ty);
 
@@ -186,35 +186,6 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
             // preemptively marking such values as inconsistent.
             if ty_from.has_inconsistencies() {
                 value = Value::Inconsistent;
-            }
-
-            // Allow `&[T; N] -> &[T]` casts
-            if let (
-                NodePtr::Known(NodeWithSpan {
-                    node: node_from, ..
-                }),
-                NodePtr::Known(NodeWithSpan { node: node_to, .. }),
-            ) = (&mut ty_from, &mut ty_to)
-            {
-                if let (
-                    TypeNode::Reference(NodePtr::Known(NodeWithSpan {
-                        node: node_from, ..
-                    })),
-                    TypeNode::Reference(NodePtr::Known(NodeWithSpan { node: node_to, .. })),
-                ) = (&mut **node_from, &mut **node_to)
-                {
-                    if let (TypeNode::Array(elem_ty_from), TypeNode::Slice(elem_ty_to)) =
-                        (&mut **node_from, &mut **node_to)
-                    {
-                        // Stupid fucking ownership semantics
-                        let elem_ty_from = core::mem::replace(elem_ty_from, NodePtr::Infer);
-                        elem_ty_to.unify_with(elem_ty_from, &mut |e| {
-                            value = Value::Inconsistent;
-                            e.emit_cast();
-                        });
-                        return TypedValue { value, ty: ty_to };
-                    }
-                }
             }
 
             ty_to.unify_with(ty_from, &mut |e| {
@@ -230,14 +201,14 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
         syn::Expr::Index(expr) => {
             let array = evaluate_syn_expr(&expr.expr);
 
-            // Allow `&[T; N] -> &[T]` indexing
+            // Allow `array[..]` as a common unsizing idiom
             if let syn::Expr::Range(range) = &*expr.index {
                 if range.start.is_none() && range.end.is_none() {
-                    if let NodePtr::Known(NodeWithSpan { node, .. }) = array.ty {
-                        if let TypeNode::Array(elem_ty) = *node {
+                    if let NodePtr::Known(NodeWithSpan { node, .. }) = &array.ty {
+                        if let TypeNode::ArrayOrSlice(_) = **node {
                             return TypedValue {
                                 value: array.value,
-                                ty: type_ptr!(expr => [#elem_ty]),
+                                ty: array.ty,
                             };
                         }
                     }
@@ -265,7 +236,7 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                         })
                         .collect(),
                 ))),
-                ty: type_ptr!(expr => &array [{integer} u8]),
+                ty: type_ptr!(expr => &[{integer} u8]),
             },
 
             syn::Lit::CStr(_) => {

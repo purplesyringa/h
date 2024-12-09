@@ -44,11 +44,8 @@ macro_rules! type_node {
     ($span:expr => & $($tt:tt)*) => {
         TypeNode::Reference($crate::types::type_ptr!($span => $($tt)*))
     };
-    ($span:expr => array [$($tt:tt)*]) => {
-        TypeNode::Array($crate::types::type_ptr!($span => $($tt)*))
-    };
     ($span:expr => [$($tt:tt)*]) => {
-        TypeNode::Slice($crate::types::type_ptr!($span => $($tt)*))
+        TypeNode::ArrayOrSlice($crate::types::type_ptr!($span => $($tt)*))
     };
     ($span:expr => (..# $e:expr)) => {
         TypeNode::Tuple($e)
@@ -211,8 +208,7 @@ pub enum TypeNode {
     Bool,
     Char,
     Reference(TypePtr),
-    Array(TypePtr),
-    Slice(TypePtr),
+    ArrayOrSlice(TypePtr),
     Tuple(Vec<TypePtr>),
     Str,
     Never,
@@ -228,8 +224,7 @@ impl Node for TypeNode {
             (Self::Integer(x), Self::Integer(y)) => x.unify_with(y, report),
 
             (Self::Reference(x), Self::Reference(y))
-            | (Self::Array(x), Self::Array(y))
-            | (Self::Slice(x), Self::Slice(y)) => x.unify_with(y, report),
+            | (Self::ArrayOrSlice(x), Self::ArrayOrSlice(y)) => x.unify_with(y, report),
 
             (Self::Tuple(xs), Self::Tuple(ys)) if xs.len() == ys.len() => {
                 for (x, y) in xs.iter_mut().zip(ys) {
@@ -254,9 +249,7 @@ impl Node for TypeNode {
     fn has_inconsistencies(&self) -> bool {
         match self {
             Self::Integer(node) => node.has_inconsistencies(),
-            Self::Reference(node) | Self::Array(node) | Self::Slice(node) => {
-                node.has_inconsistencies()
-            }
+            Self::Reference(node) | Self::ArrayOrSlice(node) => node.has_inconsistencies(),
             Self::Tuple(elems) => elems.iter().any(NodePtr::has_inconsistencies),
             Self::Bool | Self::Char | Self::Str | Self::Never => false,
         }
@@ -265,7 +258,7 @@ impl Node for TypeNode {
     fn has_infer(&self) -> bool {
         match self {
             Self::Integer(node) => node.has_infer(),
-            Self::Reference(node) | Self::Array(node) | Self::Slice(node) => node.has_infer(),
+            Self::Reference(node) | Self::ArrayOrSlice(node) => node.has_infer(),
             Self::Tuple(elems) => elems.iter().any(NodePtr::has_infer),
             Self::Bool | Self::Char | Self::Str | Self::Never => false,
         }
@@ -277,8 +270,7 @@ impl Node for TypeNode {
             Self::Bool => Self::Bool,
             Self::Char => Self::Char,
             Self::Reference(_) => Self::Reference(TypePtr::Infer),
-            Self::Array(_) => Self::Array(TypePtr::Infer),
-            Self::Slice(_) => Self::Slice(TypePtr::Infer),
+            Self::ArrayOrSlice(_) => Self::ArrayOrSlice(TypePtr::Infer),
             Self::Tuple(elems) => Self::Tuple(vec![TypePtr::Infer; elems.len()]),
             Self::Str => Self::Str,
             Self::Never => Self::Never,
@@ -294,8 +286,7 @@ impl fmt::Display for TypeNode {
             Self::Bool => f.write_str("bool"),
             Self::Char => f.write_str("char"),
             Self::Reference(node) => write!(f, "&{node}"),
-            Self::Array(node) => write!(f, "[{node}; _]"),
-            Self::Slice(node) => write!(f, "[{node}]"),
+            Self::ArrayOrSlice(node) => write!(f, "[{node}]"),
             Self::Tuple(elements) => match &**elements {
                 [] => f.write_str("()"),
                 [elem] => write!(f, "({elem},)"),
@@ -389,7 +380,7 @@ impl fmt::Display for IntegerTypeNode {
 impl TypePtr {
     pub fn from_syn_type(ty: &syn::Type) -> Self {
         let node = match ty {
-            syn::Type::Array(ty) => TypeNode::Array(Self::from_syn_type(&ty.elem)),
+            syn::Type::Array(ty) => TypeNode::ArrayOrSlice(Self::from_syn_type(&ty.elem)),
             syn::Type::Group(ty) => return Self::from_syn_type(&ty.elem),
             syn::Type::Infer(_) => return NodePtr::Infer,
             syn::Type::Never(_) => TypeNode::Never,
@@ -423,7 +414,7 @@ impl TypePtr {
                 }
                 TypeNode::Reference(Self::from_syn_type(&ty.elem))
             }
-            syn::Type::Slice(ty) => TypeNode::Slice(Self::from_syn_type(&ty.elem)),
+            syn::Type::Slice(ty) => TypeNode::ArrayOrSlice(Self::from_syn_type(&ty.elem)),
             syn::Type::Tuple(ty) => {
                 TypeNode::Tuple(ty.elems.iter().map(Self::from_syn_type).collect())
             }
