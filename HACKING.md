@@ -43,7 +43,7 @@ This is supposed to be a small Rust project, but it's not without pitfalls. Let'
 
 - We support `#![no_std]` and no-alloc environments. Try to get this separation straight: if a certain type is available in both `std` and `core`, import it from `core`. Clippy will help you here. Hiding methods that require std/alloc behind `#[cfg(feature = "std/alloc")]` is perfectly fine, but if a method can reasonably be implemented without std/alloc, prefer doing that. (Macros always require std/alloc, so following this rule in `h-macros` is not critical.)
 
-- We enforce documentation, including on private items. Try using `cargo doc --document-private-items` to find your way around the code.
+- We enforce documentation, including on private and hidden items. Generate docs with `./doc.sh` to find your way around the code.
 
 
 ### Crate separation
