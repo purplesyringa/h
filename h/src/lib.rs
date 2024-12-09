@@ -40,6 +40,7 @@
 //! - `serde`: Enables [serde](https://serde.rs/) support.
 
 #![no_std]
+#![cfg_attr(doc, feature(doc_auto_cfg))]
 
 // For docs
 #[cfg(feature = "alloc")]
