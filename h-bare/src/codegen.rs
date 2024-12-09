@@ -18,10 +18,11 @@
 //! By default, immutable objects are generated. They can be used in a `const` context and don't
 //! require dynamic allocations if the types support that (i.e. unless `Vec`, `Box`, or other types
 //! with non-`const` constructors are used). Attempting to mutate such objects may work, fail to
-//! compile, panic, or lead to any other outcome (but not cause UB).
+//! compile, panic, or lead to any other outcome (but not cause UB). In user-facing APIs, returning
+//! immutable references to the generated values is a good way to prevent runtime errors.
 //!
 //! If `set_mutability(true)` is called on the [`CodeGenerator`], mutable objects are generated.
-//! Such objects can be placed to a mutable variable and modified, and `Cell`s inside such objects
+//! Such objects can be placed in mutable variables and modified, and `Cell`s inside such objects
 //! may safely be interacted with. However, to hold this property, heap allocations might be
 //! necessary, making the code not `const`-friendly.
 //!

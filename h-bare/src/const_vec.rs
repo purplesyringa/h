@@ -1,37 +1,64 @@
+//! [`Vec`](alloc::vec::Vec), (somewhat) usable in a `const` context.
+
 use core::ops::{Deref, DerefMut};
 
+/// [`Vec`](alloc::vec::Vec) that can reference data in `static`s.
+///
+/// This is effectively a `Cow<'static, [T]>` that can be used in runtime for non-`'static` `T`s.
+///
+/// This type is used to support two hash table building environments:
+///
+/// - In runtime, when the space has to be allocated on the heap and then freed.
+/// - In compile time, when the data is stored in a `static`.
+///
+/// There's two pitfalls with this type:
+///
+/// 1. It implements [`DerefMut`], even though this is only reasonable for runtime-constructed data.
+///    There's no way to disable it for constant data, so it just panics. To enforce the absence of
+///    errors in compile time, the users of [`ConstVec`] should only return immutable references to
+///    the [`ConstVec`] via public-facing APIs. This is why macros like `map!` return `&Map` instead
+///    of `Map`.
+///
+/// 2. As [`ConstVec`] contains a [`Vec`](alloc::vec::Vec), it has non-`const` drop glue. This makes
+///    the type unusable in `const` functions. This is unlikely to change before [wide drop
+///    elaboration is enabled](https://github.com/rust-lang/rust/issues/73255).
 #[derive(Clone, Debug)]
-#[doc(hidden)]
-pub struct ConstVec<T> {
-    inner: Inner<T>,
-}
-
-#[derive(Clone, Debug)]
-enum Inner<T> {
+#[non_exhaustive]
+pub enum ConstVec<T> {
     /// Semantically `&'static [T]`. That doesn't compile without `T: 'static`, and bounds cannot be
-    /// placed on individual variants, so there's that.
+    /// placed on individual variants, so we have to use pointers.
     CompileTime(*const [T]),
 
+    /// Runtime-allocated data.
     #[cfg(feature = "alloc")]
     RunTime(alloc::vec::Vec<T>),
 }
 
-unsafe impl<T: Send> Send for Inner<T> {}
-unsafe impl<T: Sync> Sync for Inner<T> {}
+// Necessary due to use of `*const [T]`.
+// SAFETY: For `RunTime`, `T: Send` implies `Vec<T>: Send`. `CompileTime` can only be constructed
+// given `T: Sync`, so naturally `&'static [T]: Send`.
+unsafe impl<T: Send> Send for ConstVec<T> {}
+// SAFETY: For `RunTime`, `T: Sync` implies `Vec<T>: Sync`. For `CompileTime`, `T: Sync` implies
+// `&'static [T]: Sync`.
+unsafe impl<T: Sync> Sync for ConstVec<T> {}
 
-impl<T> ConstVec<T> {
+impl<T: Sync> ConstVec<T> {
+    /// Initialize the vector from static data.
+    ///
+    /// Note that this method requires `T` to be [`Sync`]. This is because:
+    ///
+    /// 1. `from_static_ref` can be called on one slice multiple times.
+    /// 2. `ConstVec<T>: Send` as long as `T: Send` for compatibility with [`Vec`](alloc::vec::Vec).
+    ///    (We want `ConstVec` to be at least as applicable as `Vec`.)
+    /// 3. `T`s that implement `Send` but not `Sync` exist.
+    /// 4. Creating two such `ConstVec<T>`s from one chunk, sending one of them to another thread,
+    ///    and then simultaneously accessing the `T`s from two threads is safe, but unsound.
+    ///
+    /// To prevent this unsoundness, we require that `T: Sync`. `T: Send => T: Sync` would also
+    /// work, but Rust cannot express this constraint.
     #[inline]
     pub const fn from_static_ref(arr: &'static [T]) -> Self {
-        Self {
-            inner: Inner::CompileTime(arr),
-        }
-    }
-}
-
-impl<T> From<&'static [T]> for ConstVec<T> {
-    #[inline]
-    fn from(arr: &'static [T]) -> Self {
-        Self::from_static_ref(arr)
+        Self::CompileTime(arr)
     }
 }
 
@@ -39,9 +66,7 @@ impl<T> From<&'static [T]> for ConstVec<T> {
 impl<T> From<alloc::vec::Vec<T>> for ConstVec<T> {
     #[inline]
     fn from(vec: alloc::vec::Vec<T>) -> Self {
-        Self {
-            inner: Inner::RunTime(vec),
-        }
+        Self::RunTime(vec)
     }
 }
 
@@ -50,21 +75,25 @@ impl<T> Deref for ConstVec<T> {
 
     #[inline]
     fn deref(&self) -> &[T] {
-        match self.inner {
-            Inner::CompileTime(ptr) => unsafe { &*ptr },
+        match self {
+            // SAFETY: `ptr` is semantically `&'static [T]`.
+            Self::CompileTime(ptr) => unsafe { &**ptr },
             #[cfg(feature = "alloc")]
-            Inner::RunTime(ref vec) => vec,
+            Self::RunTime(ref vec) => vec,
         }
     }
 }
 
 impl<T> DerefMut for ConstVec<T> {
+    /// # Panics
+    ///
+    /// Panics if initialized in compile time.
     #[inline]
     fn deref_mut(&mut self) -> &mut [T] {
-        match self.inner {
-            Inner::CompileTime(_) => panic!("Cannot mutably borrow a compile-time vector"),
+        match self {
+            Self::CompileTime(_) => panic!("Cannot mutably borrow a compile-time vector"),
             #[cfg(feature = "alloc")]
-            Inner::RunTime(ref mut vec) => vec,
+            Self::RunTime(ref mut vec) => vec,
         }
     }
 }
@@ -84,6 +113,7 @@ impl<T: super::codegen::Codegen> super::codegen::Codegen for ConstVec<T> {
     }
 }
 
+/// Scope for `serde`-related code.
 #[cfg(feature = "serde")]
 mod serde_support {
     use super::ConstVec;
