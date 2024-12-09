@@ -57,15 +57,8 @@ impl TypedValue {
 }
 
 pub trait AsTypedValue {
+    #[must_use]
     fn as_typed_value(&self, source: Span) -> TypedValue;
-}
-
-struct Inconsistent;
-
-impl AsTypedValue for Inconsistent {
-    fn as_typed_value(&self, _source: Span) -> TypedValue {
-        TypedValue::inconsistent()
-    }
 }
 
 macro_rules! from_signed_integer {
@@ -147,82 +140,91 @@ impl AsTypedValue for str {
     }
 }
 
-#[must_use]
-pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
-    match expr {
-        syn::Expr::Array(expr) => {
-            let mut unified_ty = NodePtr::Infer;
-            let values = expr
-                .elems
-                .iter()
-                .map(|elem| {
-                    let elem = evaluate_syn_expr(elem);
-                    let mut failed = false;
-                    unified_ty.unify_with(elem.ty, &mut |e| {
-                        e.emit_inference();
-                        failed = true;
-                    });
-                    if failed {
-                        unified_ty = NodePtr::Inconsistent;
-                    }
-                    elem.value
-                })
-                .collect();
-            TypedValue {
-                value: Value::ArrayOrSlice(values),
-                ty: type_ptr!(expr => [#unified_ty]),
-            }
+impl AsTypedValue for syn::ExprArray {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        let mut unified_ty = NodePtr::Infer;
+        let values = self
+            .elems
+            .iter()
+            .map(|elem| {
+                let elem = elem.as_typed_value(elem.span());
+                let mut failed = false;
+                unified_ty.unify_with(elem.ty, &mut |e| {
+                    e.emit_inference();
+                    failed = true;
+                });
+                if failed {
+                    unified_ty = NodePtr::Inconsistent;
+                }
+                elem.value
+            })
+            .collect();
+        TypedValue {
+            value: Value::ArrayOrSlice(values),
+            ty: type_ptr!(source => [#unified_ty]),
+        }
+    }
+}
+
+impl AsTypedValue for syn::ExprCast {
+    fn as_typed_value(&self, _source: Span) -> TypedValue {
+        let TypedValue {
+            mut value,
+            ty: ty_from,
+        } = self.expr.as_typed_value(self.expr.span());
+        let mut ty_to = TypePtr::from_syn_type(&self.ty);
+
+        // `value: From` and `From ~ To` does not imply `value: To` if `From` has inconsistencies,
+        // as `~` ignores them. This can lead to casts returning consistent values of consistent
+        // types that don't match the type. Prevent this by preemptively marking such values as
+        // inconsistent.
+        if ty_from.has_inconsistencies() {
+            value = Value::Inconsistent;
         }
 
-        syn::Expr::Cast(expr) => {
-            let TypedValue {
-                mut value,
-                ty: ty_from,
-            } = evaluate_syn_expr(&expr.expr);
-            let mut ty_to = TypePtr::from_syn_type(&expr.ty);
+        ty_to.unify_with(ty_from, &mut |e| {
+            value = Value::Inconsistent;
+            e.emit_cast();
+        });
 
-            // `value: From` and `From ~ To` does not imply `value: To` if `From` has
-            // inconsistencies, as `~` ignores them. This can lead to casts returning consistent
-            // values of consistent types that don't match the type. Prevent this by
-            // preemptively marking such values as inconsistent.
-            if ty_from.has_inconsistencies() {
-                value = Value::Inconsistent;
-            }
+        TypedValue { value, ty: ty_to }
+    }
+}
 
-            ty_to.unify_with(ty_from, &mut |e| {
-                value = Value::Inconsistent;
-                e.emit_cast();
-            });
+impl AsTypedValue for syn::ExprGroup {
+    fn as_typed_value(&self, _source: Span) -> TypedValue {
+        self.expr.as_typed_value(self.expr.span())
+    }
+}
 
-            TypedValue { value, ty: ty_to }
+impl AsTypedValue for syn::ExprIndex {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        // For diagnostics
+        let _ = self.expr.as_typed_value(self.expr.span());
+        let _ = self.index.as_typed_value(self.index.span());
+
+        let is_unsizing = matches!(&*self.index, syn::Expr::Range(range) if range.start.is_none() && range.end.is_none());
+
+        if is_unsizing {
+            emit_error!(
+                source,
+                "indexing is not supported\n`h` is not a full-blown interpreter\nto unsize an array, use `as &[_]`",
+            );
+        } else {
+            emit_error!(
+                source,
+                "indexing is not supported\n`h` is not a full-blown interpreter",
+            );
         }
 
-        syn::Expr::Group(expr) => evaluate_syn_expr(&expr.expr),
+        TypedValue::inconsistent()
+    }
+}
 
-        syn::Expr::Index(expr) => {
-            // For diagnostics
-            let _ = evaluate_syn_expr(&expr.expr);
-            let _ = evaluate_syn_expr(&expr.index);
-
-            let is_unsizing = matches!(&*expr.index, syn::Expr::Range(range) if range.start.is_none() && range.end.is_none());
-
-            if is_unsizing {
-                emit_error!(
-                    expr,
-                    "indexing is not supported\n`h` is not a full-blown interpreter\nto unsize an array, use `as &[_]`",
-                );
-            } else {
-                emit_error!(
-                    expr,
-                    "indexing is not supported\n`h` is not a full-blown interpreter",
-                );
-            }
-
-            TypedValue::inconsistent()
-        }
-
-        syn::Expr::Lit(expr) => match &expr.lit {
-            syn::Lit::Str(lit) => <&str>::as_typed_value(&&*lit.value(), expr.span()),
+impl AsTypedValue for syn::ExprLit {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        match &self.lit {
+            syn::Lit::Str(lit) => <&str>::as_typed_value(&&*lit.value(), source),
 
             syn::Lit::ByteStr(lit) => TypedValue {
                 value: Value::Reference(Box::new(Value::ArrayOrSlice(
@@ -231,24 +233,24 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                         .map(|byte| Value::Integer {
                             absolute_value: byte.into(),
                             negated: false,
-                            span: lit.span(),
+                            span: source,
                         })
                         .collect(),
                 ))),
-                ty: type_ptr!(expr => &[{integer} u8]),
+                ty: type_ptr!(source => &[{integer} u8]),
             },
 
             syn::Lit::CStr(_) => {
                 emit_error!(
-                    expr,
+                    source,
                     "C-string literals are not supported\n`h` is not a full-blown interpreter",
                 );
-                <&Inconsistent>::as_typed_value(&&Inconsistent, expr.span())
+                TypedValue::inconsistent()
             }
 
-            syn::Lit::Byte(lit) => u8::as_typed_value(&lit.value(), expr.span()),
+            syn::Lit::Byte(lit) => u8::as_typed_value(&lit.value(), source),
 
-            syn::Lit::Char(lit) => char::as_typed_value(&lit.value(), expr.span()),
+            syn::Lit::Char(lit) => char::as_typed_value(&lit.value(), source),
 
             syn::Lit::Int(lit) => {
                 let integer_type = if lit.suffix() == "" {
@@ -256,7 +258,7 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                 } else if let Some(ty) = IntegerTypeNode::try_from_name(lit.suffix()) {
                     NodePtr::Known(NodeWithSpan {
                         node: Box::new(ty),
-                        span: expr.span(),
+                        span: source,
                     })
                 } else {
                     emit_error!(lit, "invalid integer literal suffix `{}`", lit.suffix());
@@ -272,173 +274,209 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
                     value: Value::Integer {
                         absolute_value: value,
                         negated: false,
-                        span: lit.span(),
+                        span: source,
                     },
-                    ty: type_ptr!(expr => {integer} #integer_type),
+                    ty: type_ptr!(source => {integer} #integer_type),
                 }
             }
 
             syn::Lit::Float(_) => {
-                emit_error!(expr, "floating-point numbers cannot be hashed");
+                emit_error!(source, "floating-point numbers cannot be hashed");
                 TypedValue::inconsistent()
             }
 
-            syn::Lit::Bool(lit) => bool::as_typed_value(&lit.value(), expr.span()),
+            syn::Lit::Bool(lit) => bool::as_typed_value(&lit.value(), source),
 
             _ => {
-                emit_error!(expr, "invalid literal\n`h` is not a full-blown interpreter");
+                emit_error!(
+                    source,
+                    "invalid literal\n`h` is not a full-blown interpreter",
+                );
                 TypedValue::inconsistent()
             }
-        },
+        }
+    }
+}
 
-        syn::Expr::Macro(expr) => {
-            emit_error!(expr, "macros are not allowed in key position");
-            TypedValue::inconsistent()
+impl AsTypedValue for syn::ExprMacro {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        emit_error!(source, "macros are not allowed in key position");
+        TypedValue::inconsistent()
+        // That was anticlimatic
+    }
+}
+
+impl AsTypedValue for syn::ExprParen {
+    fn as_typed_value(&self, _source: Span) -> TypedValue {
+        self.expr.as_typed_value(self.expr.span())
+    }
+}
+
+impl AsTypedValue for syn::ExprPath {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        if self.qself.is_some() {
+            emit_error!(source, "trait paths are not allowed in key position\n`h` is not a full-blown interpreter; only certain constants are supported");
+            return TypedValue::inconsistent();
         }
 
-        syn::Expr::Paren(expr) => evaluate_syn_expr(&expr.expr),
+        if self
+            .path
+            .segments
+            .iter()
+            .any(|segment| !segment.arguments.is_empty())
+        {
+            emit_error!(source, "generic parameters are not allowed in paths in key position\n`h` is not a full-blown interpreter; only certain constants are supported");
+            return TypedValue::inconsistent();
+        }
 
-        syn::Expr::Path(expr) => {
-            if expr.qself.is_some() {
-                emit_error!(expr, "trait paths are not allowed in key position\n`h` is not a full-blown interpreter; only certain constants are supported");
-                return TypedValue::inconsistent();
-            }
-
-            if expr
-                .path
-                .segments
-                .iter()
-                .any(|segment| !segment.arguments.is_empty())
-            {
-                emit_error!(expr, "generic parameters are not allowed in paths in key position\n`h` is not a full-blown interpreter; only certain constants are supported");
-                return TypedValue::inconsistent();
-            }
-
-            let mut path_str = String::new();
-            if expr.path.leading_colon.is_some() {
+        let mut path_str = String::new();
+        if self.path.leading_colon.is_some() {
+            path_str += "::";
+        }
+        for (i, segment) in self.path.segments.iter().enumerate() {
+            if i > 0 {
                 path_str += "::";
             }
-            for (i, segment) in expr.path.segments.iter().enumerate() {
-                if i > 0 {
-                    path_str += "::";
-                }
-                write!(path_str, "{}", segment.ident).unwrap();
-            }
-
-            get_constant(&path_str, expr.span()).unwrap_or_else(|| {
-                emit_error!(expr, "unsupported path `{}`\n`h` is not a full-blown interpreter; only certain constants are supported", path_str);
-                TypedValue::inconsistent()
-            })
+            write!(path_str, "{}", segment.ident).unwrap();
         }
 
-        syn::Expr::Reference(expr) => {
-            if let Some(mutability) = expr.mutability {
-                emit_error!(mutability, "references in keys need to be immutable");
-            }
+        get_constant(&path_str, self.span()).unwrap_or_else(|| {
+            emit_error!(source, "unsupported path `{}`\n`h` is not a full-blown interpreter; only certain constants are supported", path_str);
+            TypedValue::inconsistent()
+        })
+    }
+}
 
-            let TypedValue { value, ty } = evaluate_syn_expr(&expr.expr);
-            TypedValue {
-                value: Value::Reference(Box::new(value)),
-                ty: type_ptr!(expr => & #ty),
-            }
+impl AsTypedValue for syn::ExprReference {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        if let Some(mutability) = self.mutability {
+            emit_error!(mutability, "references in keys need to be immutable");
         }
 
-        syn::Expr::Tuple(expr) => {
-            let mut values = Vec::with_capacity(expr.elems.len());
-            let mut types = Vec::with_capacity(expr.elems.len());
-            for elem in &expr.elems {
-                let TypedValue { value, ty } = evaluate_syn_expr(elem);
-                values.push(value);
-                types.push(ty);
-            }
+        let TypedValue { value, ty } = self.expr.as_typed_value(self.expr.span());
+        TypedValue {
+            value: Value::Reference(Box::new(value)),
+            ty: type_ptr!(source => & #ty),
+        }
+    }
+}
 
-            TypedValue {
-                value: Value::Tuple(values),
-                ty: type_ptr!(expr => (..#types)),
-            }
+impl AsTypedValue for syn::ExprTuple {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        let mut values = Vec::with_capacity(self.elems.len());
+        let mut types = Vec::with_capacity(self.elems.len());
+
+        for elem in &self.elems {
+            let TypedValue { value, ty } = elem.as_typed_value(elem.span());
+            values.push(value);
+            types.push(ty);
         }
 
-        syn::Expr::Unary(expr) => {
-            let argument = evaluate_syn_expr(&expr.expr);
+        TypedValue {
+            value: Value::Tuple(values),
+            ty: type_ptr!(source => (..#types)),
+        }
+    }
+}
 
-            match argument.ty {
-                NodePtr::Infer => {
-                    emit_error!(expr.expr, "type annotations needed");
-                    emit_error!(expr, "type must be known at this point");
-                }
-                NodePtr::Known(NodeWithSpan {
-                    node: arg_node,
-                    span: arg_span,
-                }) => {
-                    match expr.op {
-                        syn::UnOp::Deref(_) => {
-                            // It's occasionally useful to dereference byte string literals, so
-                            // implement this despite not being a literal
-                            let TypeNode::Reference(target_ty) = *arg_node else {
-                                emit_error!(
-                                    expr,
-                                    "type `{}` cannot be dereferenced",
-                                    arg_node.outer()
-                                );
-                                return TypedValue::inconsistent();
-                            };
-                            let target_value = match argument.value {
-                                Value::Reference(target_value) => *target_value,
-                                Value::Inconsistent => return TypedValue::inconsistent(),
+impl AsTypedValue for syn::ExprUnary {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        let argument = self.expr.as_typed_value(self.expr.span());
+
+        match argument.ty {
+            NodePtr::Infer => {
+                emit_error!(self.expr, "type annotations needed");
+                emit_error!(source, "type must be known at this point");
+            }
+            NodePtr::Known(NodeWithSpan {
+                node: arg_node,
+                span: arg_span,
+            }) => {
+                match self.op {
+                    syn::UnOp::Deref(_) => {
+                        // It's occasionally useful to dereference byte string literals, so
+                        // implement this despite not being a literal
+                        let TypeNode::Reference(target_ty) = *arg_node else {
+                            emit_error!(
+                                source,
+                                "type `{}` cannot be dereferenced",
+                                arg_node.outer()
+                            );
+                            return TypedValue::inconsistent();
+                        };
+                        let target_value = match argument.value {
+                            Value::Reference(target_value) => *target_value,
+                            Value::Inconsistent => return TypedValue::inconsistent(),
+                            _ => unreachable!(),
+                        };
+                        return TypedValue {
+                            value: target_value,
+                            ty: target_ty,
+                        };
+                    }
+
+                    syn::UnOp::Neg(_) => match *arg_node {
+                        TypeNode::Integer(_) => {
+                            let value = match argument.value {
+                                Value::Integer {
+                                    absolute_value,
+                                    negated,
+                                    ..
+                                } => Value::Integer {
+                                    absolute_value,
+                                    negated: !negated,
+                                    span: source,
+                                },
+                                Value::Inconsistent => Value::Inconsistent,
                                 _ => unreachable!(),
                             };
                             return TypedValue {
-                                value: target_value,
-                                ty: target_ty,
+                                value,
+                                ty: NodePtr::Known(NodeWithSpan {
+                                    node: arg_node,
+                                    span: arg_span,
+                                }),
                             };
                         }
-
-                        syn::UnOp::Neg(_) => match *arg_node {
-                            TypeNode::Integer(_) => {
-                                let value = match argument.value {
-                                    Value::Integer {
-                                        absolute_value,
-                                        negated,
-                                        ..
-                                    } => Value::Integer {
-                                        absolute_value,
-                                        negated: !negated,
-                                        span: expr.span(),
-                                    },
-                                    Value::Inconsistent => Value::Inconsistent,
-                                    _ => unreachable!(),
-                                };
-                                return TypedValue {
-                                    value,
-                                    ty: NodePtr::Known(NodeWithSpan {
-                                        node: arg_node,
-                                        span: arg_span,
-                                    }),
-                                };
-                            }
-                            _ => {
-                                emit_error!(
-                                    expr,
-                                    "cannot apply unary operator `-` to type `{}`",
-                                    arg_node.outer()
-                                );
-                            }
-                        },
-
                         _ => {
-                            emit_error!(expr, "unsupported unary operator\n`h` is not a full-blown interpreter; only certain operators are allowed");
+                            emit_error!(
+                                source,
+                                "cannot apply unary operator `-` to type `{}`",
+                                arg_node.outer()
+                            );
                         }
+                    },
+
+                    _ => {
+                        emit_error!(source, "unsupported unary operator\n`h` is not a full-blown interpreter; only certain operators are allowed");
                     }
                 }
-                NodePtr::Inconsistent => {}
             }
-
-            TypedValue::inconsistent()
+            NodePtr::Inconsistent => {}
         }
 
-        _ => {
-            emit_error!(expr, "unsupported expression\n`h` is not a full-blown interpreter; only certain operators are allowed");
-            TypedValue::inconsistent()
+        TypedValue::inconsistent()
+    }
+}
+
+impl AsTypedValue for syn::Expr {
+    fn as_typed_value(&self, source: Span) -> TypedValue {
+        match self {
+            syn::Expr::Array(expr) => expr.as_typed_value(source),
+            syn::Expr::Cast(expr) => expr.as_typed_value(source),
+            syn::Expr::Group(expr) => expr.as_typed_value(source),
+            syn::Expr::Index(expr) => expr.as_typed_value(source),
+            syn::Expr::Lit(expr) => expr.as_typed_value(source),
+            syn::Expr::Macro(expr) => expr.as_typed_value(source),
+            syn::Expr::Paren(expr) => expr.as_typed_value(source),
+            syn::Expr::Path(expr) => expr.as_typed_value(source),
+            syn::Expr::Reference(expr) => expr.as_typed_value(source),
+            syn::Expr::Tuple(expr) => expr.as_typed_value(source),
+            syn::Expr::Unary(expr) => expr.as_typed_value(source),
+            _ => {
+                emit_error!(source, "unsupported expression\n`h` is not a full-blown interpreter; only certain operators are allowed");
+                TypedValue::inconsistent()
+            }
         }
     }
 }

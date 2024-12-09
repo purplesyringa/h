@@ -13,7 +13,7 @@ use self::{
     hashing::{with_hashable_keys, Callback},
     parse::{Context, MapArm, WithContext},
     types::TypePtr,
-    values::{evaluate_syn_expr, TypedValue, Value},
+    values::{AsTypedValue, TypedValue, Value},
 };
 use h::{
     codegen::{CodeGenerator, Codegen},
@@ -23,7 +23,7 @@ use proc_macro2::TokenStream;
 use proc_macro_error2::{emit_call_site_error, emit_error, set_dummy};
 use quote::{quote, ToTokens};
 use std::collections::HashMap;
-use syn::{parse_macro_input, Expr};
+use syn::{parse_macro_input, spanned::Spanned, Expr};
 
 fn parse_keys<'a>(
     context: &Context,
@@ -37,7 +37,7 @@ fn parse_keys<'a>(
 
     let mut parsed_keys = Vec::new();
     for key in keys.clone() {
-        let TypedValue { value, ty } = evaluate_syn_expr(key);
+        let TypedValue { value, ty } = key.as_typed_value(key.span());
         let mut failed = false;
         key_type.unify_with(ty, &mut |e| {
             e.emit_inference();
