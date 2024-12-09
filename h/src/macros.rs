@@ -254,6 +254,16 @@ mod tests {
     }
 
     #[test]
+    fn bytes_as_key() {
+        set!(
+            for &[u8];
+            &[1, 2, 3], // direct
+            b"abc", // implicit coercion
+            b"def" as &[u8], // cast
+        );
+    }
+
+    #[test]
     fn ui() {
         let t = trybuild::TestCases::new();
         t.compile_fail("tests/ui/*.rs");

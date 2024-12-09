@@ -5,8 +5,8 @@ error: C-string literals are not supported
 14 |         c"meow" => (),
    |         ^^^^^^^
 
-error: cannot perform this indexing operation
-       `h` is not a full-blown interpreter; only unsizing `array[..]` slicing is supported
+error: indexing is not supported
+       `h` is not a full-blown interpreter
   --> tests/ui/types.rs:19:9
    |
 19 |         [1][0] => (),

@@ -201,24 +201,20 @@ pub fn evaluate_syn_expr(expr: &syn::Expr) -> TypedValue {
         syn::Expr::Index(expr) => {
             let array = evaluate_syn_expr(&expr.expr);
 
-            // Allow `array[..]` as a common unsizing idiom
-            if let syn::Expr::Range(range) = &*expr.index {
-                if range.start.is_none() && range.end.is_none() {
-                    if let NodePtr::Known(NodeWithSpan { node, .. }) = &array.ty {
-                        if let TypeNode::ArrayOrSlice(_) = **node {
-                            return TypedValue {
-                                value: array.value,
-                                ty: array.ty,
-                            };
-                        }
-                    }
-                }
+            let is_unsizing = matches!(&*expr.index, syn::Expr::Range(range) if range.start.is_none() && range.end.is_none());
+
+            if is_unsizing {
+                emit_error!(
+                    expr.span(),
+                    "indexing is not supported\n`h` is not a full-blown interpreter\nto unsize an array, use `as &[_]`"
+                );
+            } else {
+                emit_error!(
+                    expr.span(),
+                    "indexing is not supported\n`h` is not a full-blown interpreter"
+                );
             }
 
-            emit_error!(
-                expr.span(),
-                "cannot perform this indexing operation\n`h` is not a full-blown interpreter; only unsizing `array[..]` slicing is supported",
-            );
             TypedValue::inconsistent()
         }
 

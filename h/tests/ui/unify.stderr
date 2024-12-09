@@ -25,13 +25,13 @@ error: the type was inferred as `u32` here
 error: type `i64`, inferred from here, contradicts an earlier type annotation
   --> tests/ui/unify.rs:14:11
    |
-14 |         &[1_i64, 2, 3, 4][..] => (),
+14 |         &[1_i64, 2, 3, 4] as &[_] => (),
    |           ^^^^^
 
 error: the type was inferred as `i32` here
   --> tests/ui/unify.rs:13:11
    |
-13 |         &[1_i32, 2, 3][..] => (),
+13 |         &[1_i32, 2, 3] as &[_] => (),
    |           ^^^^^
 
 error: cannot cast a value of type `{integer}` to `&_`

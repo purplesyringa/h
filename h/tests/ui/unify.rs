@@ -9,9 +9,9 @@ fn main() {
         3_u64 => (),
     };
 
-    let unsized_cast = h::map! {
-        &[1_i32, 2, 3][..] => (),
-        &[1_i64, 2, 3, 4][..] => (),
+    let unsizing_cast = h::map! {
+        &[1_i32, 2, 3] as &[_] => (),
+        &[1_i64, 2, 3, 4] as &[_] => (),
     };
 
     let what = h::map! {
