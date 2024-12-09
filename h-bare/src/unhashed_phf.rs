@@ -530,7 +530,7 @@ impl super::codegen::Codegen for UnhashedPhf {
         let hash_space = gen.piece(&self.inner.hash_space);
         let hash_space_with_oob = gen.piece(&self.inner.hash_space_with_oob);
         let bucket_shift = gen.piece(&self.inner.bucket_shift);
-        let displacements = gen.piece(&&*self.inner.displacements);
+        let displacements = gen.array(&*self.inner.displacements);
         let mixer = gen.piece(&self.inner.mixer);
         quote::quote!(
             #unhashed_phf::from_raw_parts(

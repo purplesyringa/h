@@ -9,6 +9,10 @@
 //! different platforms (in case of cross-compilation) and with different crate features. Your
 //! codegen logic might need to take this into consideration.
 //!
+//! The generated values are not guaranteed to contain enough type annotations to infer the exact
+//! type that was generated. For example, `1u64` will be generated as just `1`. Add type annotations
+//! manually if necessary.
+//!
 //!
 //! # Mutability and `const`
 //!
@@ -48,10 +52,13 @@
 //! const MAP: h::Map<i32, i32> = include!("path/to/generated/code.rs");
 //! ```
 
-use alloc::borrow::{Cow, ToOwned};
-use alloc::format;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{
+    borrow::{Cow, ToOwned},
+    boxed::Box,
+    format,
+    string::String,
+    vec::Vec,
+};
 use proc_macro2::{Ident, Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::collections::{HashMap, HashSet};
@@ -151,7 +158,7 @@ impl CodeGenerator {
     /// Turn a value into code.
     #[inline]
     #[allow(clippy::missing_panics_doc, reason = "false positive")]
-    pub fn generate<T: ?Sized + Codegen>(mut self, value: &T) -> TokenStream {
+    pub fn generate<T: Codegen>(mut self, value: &T) -> TokenStream {
         let value = self.piece(value);
 
         let mut crate_paths = core::mem::take(&mut self.crate_paths);
@@ -190,8 +197,18 @@ impl CodeGenerator {
 
     /// Turn a value into a recursively useable piece of code.
     #[inline]
-    pub fn piece<T: ?Sized + Codegen>(&mut self, piece: &T) -> TokenStream {
+    pub fn piece<T: Codegen>(&mut self, piece: &T) -> TokenStream {
         piece.generate_piece(self)
+    }
+
+    /// Produce code for an array from an iterator.
+    #[inline]
+    pub fn array<'a, T: 'a + Codegen>(
+        &mut self,
+        elements: impl IntoIterator<Item = &'a T>,
+    ) -> TokenStream {
+        let elements = elements.into_iter().map(|element| self.piece(element));
+        quote!([#(#elements),*])
     }
 
     /// Resolve a path.
@@ -240,7 +257,9 @@ impl Default for CodeGenerator {
 }
 
 /// Values that can be turned into code.
-pub trait Codegen {
+///
+/// This trait is a subtrait of `Sized`, as Rust expressions can only evaluate to sized objects.
+pub trait Codegen: Sized {
     /// Emit a piece of code corresponding to this value.
     ///
     /// This method is only supposed to be called recursively from [`Codegen`] implementations. Call
@@ -277,12 +296,24 @@ literal! {
     isize => isize_unsuffixed,
     f32 => f32_unsuffixed,
     f64 => f64_unsuffixed,
+    char => character,
+    // We can't codegen `str` itself, as it's `!Sized`, so do the next best thing.
+    &'_ str => string,
 }
 
 impl Codegen for bool {
     #[inline]
     fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
         TokenTree::Ident(format_ident!("{self}")).into()
+    }
+}
+
+impl Codegen for String {
+    #[inline]
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let string = gen.path("alloc::string::String");
+        let text = gen.piece(&&**self);
+        quote!(#string::from(#text))
     }
 }
 
@@ -293,7 +324,7 @@ impl<T: ?Sized> Codegen for core::marker::PhantomData<T> {
     }
 }
 
-impl<T: Codegen> Codegen for alloc::vec::Vec<T> {
+impl<T: Codegen> Codegen for Vec<T> {
     #[inline]
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
         if let Some(bytes) = as_byte_slice(&**self) {
@@ -302,21 +333,20 @@ impl<T: Codegen> Codegen for alloc::vec::Vec<T> {
             quote!(#vec::from(#bytes))
         } else {
             let vec = gen.path("alloc::vec");
-            let rest = gen.piece(&**self);
-            quote!(#vec! #rest)
+            let array = gen.array(self);
+            quote!(#vec! #array)
         }
     }
 }
 
-impl<T: Codegen> Codegen for [T] {
+impl<T: Codegen, const N: usize> Codegen for [T; N] {
     #[inline]
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
-        let elements = self.iter().map(|element| gen.piece(element));
-        quote!([#(#elements),*])
+        gen.array(self)
     }
 }
 
-impl<T: ?Sized + Codegen> Codegen for &T {
+impl<T: Codegen> Codegen for &T {
     #[inline]
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
         if let Some(bytes) = as_byte_slice(*self) {
@@ -342,7 +372,7 @@ fn as_byte_slice<T: ?Sized>(value: &T) -> Option<&[u8]> {
     }
 }
 
-impl<T: ?Sized + ToOwned<Owned: Codegen> + Codegen> Codegen for Cow<'_, T> {
+impl<T: ToOwned<Owned: Codegen> + Codegen> Codegen for Cow<'_, T> {
     #[inline]
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
         match self {
@@ -374,6 +404,33 @@ impl<T: Codegen> Codegen for Option<T> {
     }
 }
 
+impl<T: Codegen> Codegen for Box<T> {
+    #[inline]
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let box_ = gen.path("alloc::boxed::Box");
+        let value = gen.piece(&**self);
+        quote!(#box_::new(#value))
+    }
+}
+
+impl Codegen for Box<str> {
+    #[inline]
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let string = gen.path("alloc::string::String");
+        let text = gen.piece(&&**self);
+        quote!(#string::from(#text).into_boxed_str())
+    }
+}
+
+impl<T: Codegen> Codegen for Box<[T]> {
+    #[inline]
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let box_ = gen.path("alloc::boxed::Box");
+        let array = gen.array(self);
+        quote!(#box_::new(#array))
+    }
+}
+
 impl Codegen for () {
     #[inline]
     fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
@@ -381,11 +438,44 @@ impl Codegen for () {
     }
 }
 
-impl<T: Codegen, U: ?Sized + Codegen> Codegen for (T, U) {
+impl<A: Codegen> Codegen for (A,) {
     #[inline]
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
-        let a = gen.piece(&self.0);
-        let b = gen.piece(&self.1);
-        quote!((#a, #b))
+        let value = gen.piece(&self.0);
+        quote!((#value,))
     }
 }
+
+/// Implement [`Codegen`] for tuples of size 2 or greater.
+macro_rules! tuple {
+    ($(($name:tt $index:tt))*) => {
+        impl<$($name: Codegen),*> Codegen for ($($name,)*) {
+            #[inline]
+            #[allow(non_snake_case, reason = "codegen")]
+            fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+                $(let $name = gen.piece(&self.$index);)*
+                quote!(($(#$name),*))
+            }
+        }
+    }
+}
+
+tuple!((A 0) (B 1));
+tuple!((A 0) (B 1) (C 2));
+tuple!((A 0) (B 1) (C 2) (D 3));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17) (S 18));
+tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17) (S 18) (T 19));

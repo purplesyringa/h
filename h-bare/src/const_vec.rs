@@ -103,7 +103,7 @@ impl<T: super::codegen::Codegen> super::codegen::Codegen for ConstVec<T> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let const_vec = gen.path("h::low_level::ConstVec");
-        let data = gen.piece(&**self);
+        let data = gen.array(&**self);
         if gen.mutability() {
             let vec = gen.path("alloc::vec");
             quote::quote!(#const_vec::from(#vec!#data))
