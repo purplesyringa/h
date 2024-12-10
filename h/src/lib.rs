@@ -50,7 +50,9 @@ extern crate std;
 
 extern crate self as h;
 
-#[doc(inline)]
+// Inlining documentation removes docs from private/hidden functions. Force no-inline when compiling
+// dev docs.
+#[cfg_attr(devdoc, doc(no_inline))]
 pub use h_bare::*;
 
 #[cfg(feature = "macros")]

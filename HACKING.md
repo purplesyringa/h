@@ -3,6 +3,11 @@
 This section cover certain rules of thumb you should keep in mind while contributing.
 
 
+### Documentation
+
+We enforce documentation, including on private and hidden items. You can generate the full developer documentation with `./doc.sh`. Use this to find your way around the code.
+
+
 ### Testing
 
 Run `cargo test` in `h-bare` and `h`. The tests in `h-bare` test everything but macros, the tests in `h` test macros.
@@ -42,8 +47,6 @@ This is supposed to be a small Rust project, but it's not without pitfalls. Let'
 - We enable many [Clippy](https://github.com/rust-lang/rust-clippy) diagnostics, perhaps more than necessary sometimes. Feel free to `#[allow]` diagnostics that get in the way. Prefer doing that as locally as possible, unless that's too intrusive.
 
 - We support `#![no_std]` and no-alloc environments. Try to get this separation straight: if a certain type is available in both `std` and `core`, import it from `core`. Clippy will help you here. Hiding methods that require std/alloc behind `#[cfg(feature = "std/alloc")]` is perfectly fine, but if a method can reasonably be implemented without std/alloc, prefer doing that. (Macros always require std/alloc, so following this rule in `h-macros` is not critical.)
-
-- We enforce documentation, including on private and hidden items. Generate docs with `./doc.sh` to find your way around the code.
 
 
 ### Crate separation
