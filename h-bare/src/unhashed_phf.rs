@@ -52,7 +52,7 @@ impl UnhashedPhf {
         hash_space: usize,
         hash_space_with_oob: usize,
         bucket_shift: u32,
-        displacements: &'static [u16],
+        displacements: ConstVec<u16>,
         mixer: Mixer,
     ) -> Self {
         Self {
@@ -60,7 +60,7 @@ impl UnhashedPhf {
                 hash_space,
                 hash_space_with_oob,
                 bucket_shift,
-                displacements: ConstVec::from_static_ref(displacements),
+                displacements,
                 mixer,
             },
         }
@@ -81,7 +81,13 @@ impl UnhashedPhf {
     #[must_use]
     pub fn try_from_keys(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         if keys.is_empty() {
-            return Some(Self::from_raw_parts(0, 1, 63, &[0, 0], Mixer::Add));
+            return Some(Self::from_raw_parts(
+                0,
+                1,
+                63,
+                ConstVec::from_static_ref(&[0, 0]),
+                Mixer::Add,
+            ));
         }
 
         let buckets = Buckets::try_from_keys(keys, hash_space)?;
@@ -530,7 +536,7 @@ impl super::codegen::Codegen for UnhashedPhf {
         let hash_space = gen.piece(&self.inner.hash_space);
         let hash_space_with_oob = gen.piece(&self.inner.hash_space_with_oob);
         let bucket_shift = gen.piece(&self.inner.bucket_shift);
-        let displacements = gen.array(&*self.inner.displacements);
+        let displacements = gen.piece(&self.inner.displacements);
         let mixer = gen.piece(&self.inner.mixer);
         quote::quote!(
             #unhashed_phf::from_raw_parts(

@@ -9,9 +9,17 @@
 //! different platforms (in case of cross-compilation) and with different crate features. Your
 //! codegen logic might need to take this into consideration.
 //!
+//!
+//! # Typing
+//!
 //! The generated values are not guaranteed to contain enough type annotations to infer the exact
-//! type that was generated. For example, `1u64` will be generated as just `1`. Add type annotations
-//! manually if necessary.
+//! type that was generated. For example, `1u64` will be generated as just `1`.
+//!
+//! Similarly, the expressions are only guaranteed to be correct up to
+//! [coercions](https://doc.rust-lang.org/reference/type-coercions.html). For example, a `&[T]`
+//! slice to `[1, 2, 3]` will be generated as `&[1, 2, 3]`, not `&[1, 2, 3][..]`.
+//!
+//! If necessary, add type annotations manually at the call site.
 //!
 //!
 //! # Mutability and `const`
@@ -355,6 +363,18 @@ impl<T: Codegen> Codegen for &T {
         } else {
             let target = gen.piece(*self);
             quote!(&#target)
+        }
+    }
+}
+
+impl<T: Codegen> Codegen for &[T] {
+    #[inline]
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        if let Some(bytes) = as_byte_slice(*self) {
+            TokenTree::Literal(Literal::byte_string(bytes)).into()
+        } else {
+            let array = gen.array(*self);
+            quote!(&#array)
         }
     }
 }
