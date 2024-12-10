@@ -40,19 +40,41 @@ pub trait ImperfectHasher<T: ?Sized>: Clone + fmt::Debug {
 
 /// Generic imperfect hasher.
 ///
-/// Can hash types that implement [`PortableHash`], which is like [`core::hash::Hash`] but with
+/// Hashes types that implement [`PortableHash`], which is like [`core::hash::Hash`] but with
 /// a portability guarantee. No stability guarantees are provided regarding the resulting hashes.
 ///
-/// Might be slower than necessary on structured data -- implement [`ImperfectHasher`] yourself if
-/// this matters.
+/// Might be slower than necessary on structured data -- implement [`PortableHash`] for a specific
+/// type if this matters, or improve the overall performance with a custom [`ImperfectHasher`].
+///
+///
+/// # Implementation details
+///
+/// This section is purely informational and can only be relied upon for a given version of the
+/// crate. No stability guarantees are offered.
+///
+/// For integers up to 64 bits long, `bool`, and `char`, the hash is computed as
+/// `(key as u64).wrapping_mul(self.low)`. For 128-bit integers,
+/// `low.wrapping_mul(self.low) ^ high.wrapping_mul(self.high)` is computed, where `low` and `high`
+/// are the low and the high 64 bits of the key.
+///
+/// This means that as long as `self.high == 0`, the hash of an integer is invariant under sign-
+/// or zero-extending it to 128 bits (like `as u128` does).
+///
+/// For other types, [`rapidhash`] is applied to the output of [`PortableHash`], with `self.low`
+/// used as the seed.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GenericHasher {
+    /// Multiplier for the low half for hashing a 128-bit value. Also dupes as a rapidhash seed.
     low: u64,
+    /// Multiplier for the high half for hashing a 128-bit value.
     high: u64,
 }
 
 impl GenericHasher {
+    /// Initialize from saved data.
+    ///
+    /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -61,23 +83,6 @@ impl GenericHasher {
     }
 }
 
-/// Implementation details of the generic hasher.
-///
-/// # Informational
-///
-/// No stability guarantees are offered. This section is informational and can only be relied upon
-/// for a given version of the crate.
-///
-/// For integers up to 64 bits long and `bool`, the hash is computed as
-/// `(key as u64).wrapping_mul(self.low)`. This means that the hash value is invariant under
-/// extending the length of the integer type up to 64 bits.
-///
-/// For 128-bit integers, `low.wrapping_mul(self.low) ^ high.wrapping_mul(self.high)` is computed,
-/// where `low` and `high` are the low and the high 64 bits of the key. This means that if
-/// `self.high == 0`, hashing a 128-bit integer is equivalent to hashing its low 64-bit half.
-///
-/// For other types, rapidhash is applied to the output of [`PortableHash`], with `self.low` used as
-/// the seed.
 impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
     #[inline]
     fn hash(&self, key: &T) -> u64 {
@@ -166,13 +171,14 @@ impl<T: ?Sized + PortableHash> PortableHash for &mut T {
     }
 }
 
+/// Implement [`PortableHash`] for small integers by calling into [`Hasher`].
 macro_rules! impl_primitive {
-    ($($ty:ty => $fn:ident,)*) => {
+    ($($ty:ty => $method:ident,)*) => {
         $(
             impl PortableHash for $ty {
                 #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    state.$fn(*self);
+                    state.$method(*self);
                 }
 
                 #[inline]
@@ -196,13 +202,14 @@ impl_primitive! {
     i64 => write_i64,
 }
 
+/// Implement [`PortableHash`] for 128-bit integers by calling into [`Hasher`].
 macro_rules! impl_primitive_128 {
-    ($($ty:ty => $fn:ident,)*) => {
+    ($($ty:ty => $method:ident,)*) => {
         $(
             impl PortableHash for $ty {
                 #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    state.$fn(*self);
+                    state.$method(*self);
                 }
 
                 #[inline]
@@ -255,6 +262,11 @@ impl PortableHash for bool {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u8(u8::from(*self));
     }
+
+    #[inline]
+    fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+        u64::from(*self).wrapping_mul(hasher.low)
+    }
 }
 
 impl PortableHash for char {
@@ -262,10 +274,16 @@ impl PortableHash for char {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u32(*self as u32);
     }
+
+    #[inline]
+    fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
+        u64::from(*self).wrapping_mul(hasher.low)
+    }
 }
 
 // Floats shouldn't implement `Hash` because they don't implement `Eq`
 
+/// Implement [`PortableHash`] for types that represent UTF-8 strings.
 macro_rules! impl_str {
     ($ty:ty) => {
         impl PortableHash for $ty {
