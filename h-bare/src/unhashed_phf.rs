@@ -1,3 +1,5 @@
+//! Perfect hash functions with untyped inputs.
+
 #![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
 
 use super::const_vec::ConstVec;
@@ -5,7 +7,7 @@ use super::const_vec::ConstVec;
 #[cfg(feature = "build")]
 use alloc::{vec, vec::Vec};
 
-// We assume that usize is at most 64-bit in many places.
+/// We assume that usize is at most 64-bit in many places.
 const _: () = assert!(
     size_of::<usize>() <= size_of::<u64>(),
     "I want your computer."
@@ -22,9 +24,14 @@ const _: () = assert!(
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "UnhashedPhfInner"))]
 pub struct UnhashedPhf {
+    /// The actual PHF.
     inner: UnhashedPhfInner,
 }
 
+/// The actual PHF.
+///
+/// This needs to be a separate type so that `serde` can convert from this type to [`UnhashedPhf`]
+/// with [`TryFrom`] during deserialization, so that we can validate the PHF.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct UnhashedPhfInner {
@@ -129,11 +136,13 @@ impl UnhashedPhf {
     }
 }
 
+/// Scope for `serde`-related code.
 #[cfg(feature = "serde")]
 mod serde_support {
     use super::{UnhashedPhf, UnhashedPhfInner};
     use thiserror::Error;
 
+    /// Deserialization validation failures.
     #[derive(Debug, Error)]
     pub enum Error {
         #[error("Too large bucket_shift value")]
@@ -184,7 +193,10 @@ struct Buckets {
     /// The `hash_space` parameter this object is valid under
     hash_space: usize,
 
+    /// The number of buckets.
     bucket_count: usize,
+
+    /// How much a 64-bit hash needs to be shifted to the right to produce a bucket ID.
     bucket_shift: u32,
 }
 
@@ -349,6 +361,10 @@ impl Buckets {
     }
 }
 
+/// Multiply `u64` by `usize`, producing a `u128`.
+///
+/// Semantically produces a number with the top half in range `[0; b)`, "scaling" the input from
+/// `[0; 1)` to `[0; b)` in 64.64 fixed-point.
 const fn multiply_scale(a: u64, b: usize) -> u128 {
     a as u128 * b as u128
 }
@@ -365,6 +381,7 @@ pub enum Mixer {
 }
 
 impl Mixer {
+    /// Mix `Approx` with a displacement to get the final hash.
     const fn mix(self, approx: u64, displacement: u16) -> usize {
         #[allow(
             clippy::cast_possible_truncation,
@@ -491,6 +508,11 @@ impl Mixer {
         None
     }
 
+    /// Compute the range of indices that can be accessed by absent keys.
+    ///
+    /// Given the range of Approx values (`[0; hash_space)`) and the table of displacements,
+    /// computes the limit `hash_space_with_oob` such that for any key, including a key not from the
+    /// training set, the computed `hash` is below the limit.
     #[cfg(feature = "build")]
     fn get_hash_space_with_oob(self, hash_space: usize, displacements: &[u16]) -> usize {
         let max_displacement = *displacements.iter().max().unwrap_or(&0) as usize;
@@ -507,6 +529,13 @@ impl Mixer {
     }
 }
 
+/// Bit permutation LUT.
+///
+/// `lut[control][byte]` is computed by taking the individual bits of `byte` and moving each bit
+/// from position `i` to `i ^ control`. For example, `lut[0][byte]` is just `byte`, while
+/// `lut[7][byte]` reverses the bits in `byte`.
+///
+/// This is used to optimize the search for valid displacements for the xor mixer.
 #[cfg(feature = "build")]
 const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
     let mut lut = [[0; 256]; 8];

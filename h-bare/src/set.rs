@@ -1,3 +1,5 @@
+//! Perfect hash sets.
+
 use super::{
     const_vec::ConstVec,
     hash::{GenericHasher, ImperfectHasher},
@@ -13,13 +15,27 @@ use core::borrow::Borrow;
     reason = "safety requirements are validated using TryFrom"
 )]
 pub struct Set<T, H = GenericHasher> {
+    /// The actual set.
     inner: SetInner<T, H>,
 }
 
+/// The actual set.
+///
+/// This needs to be a separate type so that `serde` can convert from this type to [`Set`] with
+/// [`TryFrom`] during deserialization, so that we can validate the set.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct SetInner<T, H> {
+    /// A PHF mapping values to indices in [`data`](Self::data).
     phf: Phf<T, H>,
+
+    /// The elements of the set, indexed by their perfect hashes. `None` means an element with such
+    /// a hash is absent.
     data: ConstVec<Option<T>>,
+
+    /// The number of elements in the set.
+    ///
+    /// This is equal to the number of `Some` values in [`data`](Self::data) and is used purely for
+    /// optimization of [`len`](Set::len).
     len: usize,
 }
 
@@ -111,11 +127,13 @@ impl<T, H> Set<T, H> {
     }
 }
 
+/// Scope for `serde`-related code.
 #[cfg(feature = "serde")]
 mod serde_support {
     use super::{Set, SetInner};
     use thiserror::Error;
 
+    /// Deserialization validation failures.
     #[derive(Debug, Error)]
     pub enum Error {
         #[error("Wrong data length")]

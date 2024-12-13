@@ -1,3 +1,5 @@
+//! Perfect hash maps.
+
 use super::{
     const_vec::ConstVec,
     hash::{GenericHasher, ImperfectHasher},
@@ -13,13 +15,27 @@ use core::borrow::Borrow;
     reason = "safety requirements are validated using TryFrom"
 )]
 pub struct Map<K, V, H = GenericHasher> {
+    /// The actual map.
     inner: MapInner<K, V, H>,
 }
 
+/// The actual map.
+///
+/// This needs to be a separate type so that `serde` can convert from this type to [`Map`] with
+/// [`TryFrom`] during deserialization, so that we can validate the map.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct MapInner<K, V, H> {
+    /// A PHF mapping keys to indices in [`data`](Self::data).
     phf: Phf<K, H>,
+
+    /// The entries of the map, indexed by their perfect hashes. `None` means an entry whose key has
+    /// such a hash is absent.
     data: ConstVec<Option<(K, V)>>,
+
+    /// The number of elements in the map.
+    ///
+    /// This is equal to the number of `Some` values in [`data`](Self::data) and is used purely for
+    /// optimization of [`len`](Map::len).
     len: usize,
 }
 
@@ -190,11 +206,13 @@ impl<K, V, H> Map<K, V, H> {
     }
 }
 
+/// Scope for `serde`-related code.
 #[cfg(feature = "serde")]
 mod serde_support {
     use super::{Map, MapInner};
     use thiserror::Error;
 
+    /// Deserialization validation failures.
     #[derive(Debug, Error)]
     pub enum Error {
         #[error("Wrong data length")]

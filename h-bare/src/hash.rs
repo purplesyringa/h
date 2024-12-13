@@ -17,14 +17,21 @@ use rapidhash::RapidRng;
 
 /// An imperfect hash function, specialized for a particular type.
 ///
-/// Unlike [`core::hash::Hash`], this hash *must* be portable between platforms. This means that,
-/// generally speaking, you cannot create it by combining [`core::hash::Hash`] and
-/// [`core::hash::Hasher`].
-///
-/// Hashes of two objects that compare equal with [`Eq`] must be equal too.
-///
-/// In addition, if `ImperfectHasher<T>` and `ImperfectHasher<U>` are implemented for one type and
+/// Just like with [`core::hash::Hash`], hashes of two objects that compare equal with [`Eq`] must
+/// be equal too. If `ImperfectHasher<T>` and `ImperfectHasher<U>` are implemented for one type and
 /// `T: Borrow<U>`, the hashes must be equal between `x` and `x.borrow()`.
+///
+/// However, there are a few additional requirements where [`ImperfectHasher`] differs
+/// from the `std` hashing mechanism:
+///
+/// - The hash must be portable between platforms. This means that, generally speaking, you cannot
+///   create it by combining [`core::hash::Hash`] and [`core::hash::Hasher`]. Otherwise,
+///   compile-time building might be broken, especially during cross-compilation.
+///
+/// - The hash must be almost universal. In other words, if `a != b`, `a` and `b` must have
+///   different hashes for almost all functions in the hash family. Note that this explicitly
+///   forbids seed-independent collisions, which would in practice lead to the PHF generation
+///   hanging.
 pub trait ImperfectHasher<T: ?Sized>: Clone + fmt::Debug {
     /// Hash a key.
     fn hash(&self, key: &T) -> u64;
@@ -103,22 +110,31 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
 /// Portable alternative to [`core::hash::Hash`].
 ///
 /// Much like with [`core::hash::Hash`], `Eq`-equal objects must imply equal data passed to the
-/// hasher, and the data must be prefix-free.
+/// hasher. Similarly, if `T: Borrow<U>` and both `T` and `U` implement [`PortableHash`], the hashes
+/// must be equal between a value and its borrowed counterpart.
 ///
-/// Similarly, if `T: Borrow<U>` and both `T` and `U` implement [`PortableHash`], the hashes must be
-/// equal between a value and its borrowed counterpart.
+/// In addition:
 ///
-/// In addition, the written data must be portable between platforms. For example, directly writing
-/// `usize` into the hasher is a bad idea because of possible differences in pointer size.
+/// - The written data must be portable between platforms. For example, directly writing `usize`
+///   into the hasher is a bad idea because of possible differences in pointer size.
+///
+/// - When hashing two objects that compare unequal, the sequence of `write_*` calls must be
+///   different between the two objects. In addition, the *first* different `write_*` call must be
+///   an invocation of *the same* method with both of the objects, with different arguments. In
+///   addition, if that method is `write`, the byte string written by one object must not be
+///   a prefix of the byte string written by another object.
 pub trait PortableHash {
     /// Write a value into the hasher.
     fn hash<H: Hasher>(&self, state: &mut H);
 
-    /// Write a slice values into the hasher.
+    /// Write a slice of values into the hasher.
     ///
-    /// This does not write the length of the slice beforehand and is semantically equivalent to
-    /// calling [`PortableHash::hash`] for each element of the slice. When hashing a variable-length
-    /// collection, call [`Hasher::write_u64`] to emit the size before hashing the elements.
+    /// This is semantically equivalent to calling [`PortableHash::hash`] for each element of the
+    /// slice one by one, but is not guaranteed to produce an equivalent hash.
+    ///
+    /// This method does not necessarily write the length of the slice beforehand, so an invocation
+    /// of `hash_slice` on a variable-length slice usually needs to be leaded by writing the length
+    /// of the slice with [`Hasher::write_u64`].
     #[inline]
     fn hash_slice<H: Hasher>(data: &[Self], state: &mut H)
     where

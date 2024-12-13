@@ -1,3 +1,5 @@
+//! Perfect hash functions with typed inputs.
+
 use super::{
     hash::{GenericHasher, ImperfectHasher},
     unhashed_phf::UnhashedPhf,
@@ -11,8 +13,13 @@ use core::marker::PhantomData;
 /// might be larger than the size of the training key set.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Phf<T, H = GenericHasher> {
+    /// The hasher, mapping `T` to a numeric imperfect hash.
     hash: H,
+
+    /// The underlying untyped PHF.
     unhashed_phf: UnhashedPhf,
+
+    /// Mark [`Phf`] as contravariant in `T`.
     _marker: PhantomData<fn(T)>,
 }
 

@@ -23,6 +23,7 @@ pub use map::Map;
 pub use phf::Phf;
 pub use set::Set;
 
+/// Public (but hidden) reexports for codegen to access.
 #[doc(hidden)]
 pub mod low_level {
     pub use super::const_vec::ConstVec;
