@@ -9,7 +9,15 @@ use core::borrow::Borrow;
 
 /// A perfect hash set.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(try_from = "SetInner<T, H>"))]
+#[cfg_attr(
+    feature = "serde",
+    serde(
+        bound(
+            deserialize = "T: serde::Deserialize<'de>, H: serde::Deserialize<'de> + ImperfectHasher<T>"
+        ),
+        try_from = "SetInner<T, H>"
+    )
+)]
 #[allow(
     clippy::unsafe_derive_deserialize,
     reason = "safety requirements are validated using TryFrom"
@@ -130,7 +138,7 @@ impl<T, H> Set<T, H> {
 /// Scope for `serde`-related code.
 #[cfg(feature = "serde")]
 mod serde_support {
-    use super::{Set, SetInner};
+    use super::{ImperfectHasher, Set, SetInner};
     use thiserror::Error;
 
     /// Deserialization validation failures.
@@ -141,9 +149,12 @@ mod serde_support {
 
         #[error("Wrong len")]
         WrongLen,
+
+        #[error("Misplaced element")]
+        MisplacedElement,
     }
 
-    impl<T, H> TryFrom<SetInner<T, H>> for Set<T, H> {
+    impl<T, H: ImperfectHasher<T>> TryFrom<SetInner<T, H>> for Set<T, H> {
         type Error = Error;
 
         #[inline]
@@ -154,6 +165,14 @@ mod serde_support {
 
             if inner.len != inner.data.iter().filter(|opt| opt.is_some()).count() {
                 return Err(Error::WrongLen);
+            }
+
+            for (index, element) in inner.data.iter().enumerate() {
+                if let Some(value) = element {
+                    if inner.phf.hash(value) != index {
+                        return Err(Error::MisplacedElement);
+                    }
+                }
             }
 
             Ok(Self { inner })

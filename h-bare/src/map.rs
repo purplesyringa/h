@@ -9,7 +9,15 @@ use core::borrow::Borrow;
 
 /// A perfect hash map.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(try_from = "MapInner<K, V, H>"))]
+#[cfg_attr(
+    feature = "serde",
+    serde(
+        bound(
+            deserialize = "K: serde::Deserialize<'de>, V: serde::Deserialize<'de>, H: serde::Deserialize<'de> + ImperfectHasher<K>"
+        ),
+        try_from = "MapInner<K, V, H>"
+    )
+)]
 #[allow(
     clippy::unsafe_derive_deserialize,
     reason = "safety requirements are validated using TryFrom"
@@ -209,7 +217,7 @@ impl<K, V, H> Map<K, V, H> {
 /// Scope for `serde`-related code.
 #[cfg(feature = "serde")]
 mod serde_support {
-    use super::{Map, MapInner};
+    use super::{ImperfectHasher, Map, MapInner};
     use thiserror::Error;
 
     /// Deserialization validation failures.
@@ -220,9 +228,12 @@ mod serde_support {
 
         #[error("Wrong len")]
         WrongLen,
+
+        #[error("Misplaced entry")]
+        MisplacedEntry,
     }
 
-    impl<K, V, H> TryFrom<MapInner<K, V, H>> for Map<K, V, H> {
+    impl<K, V, H: ImperfectHasher<K>> TryFrom<MapInner<K, V, H>> for Map<K, V, H> {
         type Error = Error;
 
         #[inline]
@@ -233,6 +244,14 @@ mod serde_support {
 
             if inner.len != inner.data.iter().filter(|opt| opt.is_some()).count() {
                 return Err(Error::WrongLen);
+            }
+
+            for (index, entry) in inner.data.iter().enumerate() {
+                if let Some((key, _)) = entry {
+                    if inner.phf.hash(key) != index {
+                        return Err(Error::MisplacedEntry);
+                    }
+                }
             }
 
             Ok(Self { inner })
