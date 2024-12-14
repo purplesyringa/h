@@ -27,6 +27,66 @@
 //!    instead of codegen for large data.
 //!
 //!
+//! # Examples
+//!
+//! Make a static map with macros:
+//!
+//! ```rust
+//! #[derive(Debug, PartialEq)]
+//! enum Keyword {
+//!     Loop,
+//!     Continue,
+//!     Break,
+//!     Fn,
+//!     Extern,
+//! }
+//!
+//! const KEYWORDS: &h::Map<&str, Keyword> = h::map! {
+//!     "loop" => Keyword::Loop,
+//!     "continue" => Keyword::Continue,
+//!     "break" => Keyword::Break,
+//!     "fn" => Keyword::Fn,
+//!     "extern" => Keyword::Extern,
+//! };
+//!
+//! assert_eq!(KEYWORDS.get("break"), Some(&Keyword::Break));
+//! assert_eq!(KEYWORDS.get("ident"), None);
+//! ```
+//!
+//! Create a map in runtime:
+//!
+//! ```rust
+//! struct Context;
+//!
+//! // parser definitions
+//! fn parse_loop(_ctx: &mut Context) {}
+//! fn parse_continue(_ctx: &mut Context) {}
+//! fn parse_break(_ctx: &mut Context) {}
+//! fn parse_fn(_ctx: &mut Context) {}
+//! fn parse_extern(_ctx: &mut Context) {}
+//!
+//! let keywords: h::Map<&str, fn(&mut Context)> = h::Map::from_entries(vec![
+//!     ("loop", parse_loop),
+//!     ("continue", parse_continue),
+//!     ("break", parse_break),
+//!     ("fn", parse_fn),
+//!     ("extern", parse_extern),
+//! ]);
+//!
+//! let handler = keywords.get("break").unwrap();
+//! handler(&mut Context);
+//! ```
+//!
+//! Programmatically code-gen a set in `build.rs`:
+//!
+//! ```rust
+//! let keywords = vec!["loop", "continue", "break", "fn", "extern"];
+//! let keywords: h::Set<&str> = h::Set::from_elements(keywords);
+//! let code = h::codegen::CodeGenerator::new().generate(&keywords);
+//! // save `code` to a file and `include!` it inside the crate
+//! ```
+//!
+//!
 //! # Features
 //!
 //! - `std` (default): Whether [`std`] is available. Isn't currently used for much except tests.
