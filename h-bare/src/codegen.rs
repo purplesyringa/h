@@ -195,10 +195,26 @@ impl CodeGenerator {
         }
 
         quote!(
+            // nested braces enable attributes on expressions on stable
             {
-                #extern_crate_alloc
-                #(#uses)*
-                #value
+                // workaround `unused_braces` warning
+                #[allow(
+                    clippy::allow_attributes_without_reason,
+                    clippy::no_effect
+                )]
+                ();
+
+                #[allow(
+                    clippy::decimal_literal_representation,
+                    clippy::allow_attributes_without_reason,
+                    clippy::unreadable_literal,
+                    unused_braces
+                )]
+                {
+                    #extern_crate_alloc
+                    #(#uses)*
+                    #value
+                }
             }
         )
     }
