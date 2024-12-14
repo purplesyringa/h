@@ -195,6 +195,6 @@ impl<T: super::codegen::Codegen, H: super::codegen::Codegen> super::codegen::Cod
         let phf = gen.piece(&self.inner.phf);
         let data = gen.piece(&self.inner.data);
         let len = gen.piece(&self.inner.len);
-        quote::quote!(#set::from_raw_parts(#phf, #data, #len))
+        quote::quote!(#set::__from_raw_parts(#phf, #data, #len))
     }
 }

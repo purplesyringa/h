@@ -96,7 +96,7 @@ impl CodeGenerator {
     ///
     /// We generate code of the following format:
     ///
-    /// ```rust
+    /// ```ignore
     /// { // wrap in braces to add scope to an expression
     ///     extern crate alloc as _Alloc; // used for paths within alloc, e.g. `_Alloc::vec::Vec`
     ///     use ::h::Map as __Map;
