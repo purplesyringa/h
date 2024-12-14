@@ -1,7 +1,7 @@
 use super::Map;
-use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::{vec, vec::Vec};
+use ruzstd::{io::Read, StreamingDecoder};
 
 #[test]
 fn borrow() {
@@ -26,15 +26,21 @@ fn build_10m_integers() {
     assert_eq!(phf.get(&0), None);
 }
 
+fn decode_zstd(source: impl Read) -> Vec<u8> {
+    let mut decoder = StreamingDecoder::new(source).expect("Failed to decode zstd");
+    let mut result = Vec::new();
+    decoder
+        .read_to_end(&mut result)
+        .expect("Failed to decode zstd");
+    result
+}
+
 #[cfg(feature = "std")]
 macro_rules! read_testdata {
     ($name:literal) => {{
-        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("..");
-        path.push("tests");
-        path.push(concat!($name, ".zst"));
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/", $name, ".zst");
         let file = std::fs::File::open(path).expect("Failed to open file");
-        Cow::<'static, [u8]>::from(zstd::decode_all(file).expect("Failed to decode zstd"))
+        decode_zstd(file)
     }};
 }
 
@@ -42,8 +48,13 @@ macro_rules! read_testdata {
 macro_rules! read_testdata {
     ($name:literal) => {{
         // Slower to compile, but doesn't need std
-        static DATA: &[u8] = include_bytes!(concat!($name, ".zst"));
-        Cow::<'static, [u8]>::from(zstd::decode_all(DATA).expect("Failed to decode zstd"))
+        static DATA: &[u8] = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/",
+            $name,
+            ".zst"
+        ));
+        decode_zstd(DATA)
     }};
 }
 

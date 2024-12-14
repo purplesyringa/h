@@ -8,7 +8,7 @@ h = { path = "../h" }
 
 [build-dependencies]
 h = { path = "../h", features = ["build", "codegen"] }
-zstd = "0.13.2"
+ruzstd = { git = "https://github.com/KillingSpark/zstd-rs", rev = "1d3f062ab57aa91344e027bca0430f5136ea0c7c" }
 
 [features]
 enabled = []

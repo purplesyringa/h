@@ -1,6 +1,8 @@
 #![cfg(feature = "enabled")]
 
 use h::codegen::CodeGenerator;
+use ruzstd::StreamingDecoder;
+use std::io::Read;
 use std::path::PathBuf;
 
 fn main() {
@@ -11,7 +13,12 @@ fn main() {
     path.push("tests");
     path.push("english.txt.zst");
     let file = std::fs::File::open(path).expect("Failed to open file");
-    let testdata = zstd::decode_all(file).expect("Failed to decode zstd");
+
+    let mut decoder = StreamingDecoder::new(file).expect("Failed to decode zstd");
+    let mut testdata = Vec::new();
+    decoder
+        .read_to_end(&mut testdata)
+        .expect("Failed to decode zstd");
 
     let mut entries = Vec::new();
     for (i, line) in testdata.split(|&c| c == b'\n').enumerate() {

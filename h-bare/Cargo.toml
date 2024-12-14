@@ -20,7 +20,7 @@ thiserror = { version = "2.0.3", optional = true, default-features = false }
 typeid = { version = "1.0.2", optional = true }
 
 [dev-dependencies]
-zstd = "0.13.2"
+ruzstd = { git = "https://github.com/KillingSpark/zstd-rs", rev = "1d3f062ab57aa91344e027bca0430f5136ea0c7c", default-features = false }
 
 [features]
 default = ["std"]
@@ -28,7 +28,7 @@ alloc = ["serde?/alloc"]
 build = ["alloc", "dep:radsort"]
 codegen = ["std", "dep:proc-macro2", "dep:quote", "dep:typeid"]
 serde = ["dep:displaydoc", "dep:serde", "dep:thiserror"]
-std = ["alloc"]
+std = ["alloc", "ruzstd/std"]
 
 [lints]
 workspace = true
