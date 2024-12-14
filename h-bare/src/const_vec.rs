@@ -142,3 +142,39 @@ mod serde_support {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consttime() {
+        let values = const { ConstVec::from_static_ref(&["meow", "nya", "cutie"]) };
+        assert_eq!(values.get(0), Some(&"meow"));
+        assert_eq!(values.get(1), Some(&"nya"));
+        assert_eq!(values.get(2), Some(&"cutie"));
+        assert_eq!(values.get(3), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot mutably borrow a compile-time vector")]
+    fn const_unmut() {
+        let mut values = const { ConstVec::from_static_ref(&["meow", "nya", "cutie"]) };
+        values[1] = "mrrrrp";
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn runtime() {
+        let mut values = ConstVec::from(alloc::vec!["meow", "nya", "cutie"]);
+        assert_eq!(values.get(0), Some(&"meow"));
+        assert_eq!(values.get(1), Some(&"nya"));
+        assert_eq!(values.get(2), Some(&"cutie"));
+        assert_eq!(values.get(3), None);
+        values[1] = "mrrrrp";
+        assert_eq!(values.get(0), Some(&"meow"));
+        assert_eq!(values.get(1), Some(&"mrrrrp"));
+        assert_eq!(values.get(2), Some(&"cutie"));
+        assert_eq!(values.get(3), None);
+    }
+}
