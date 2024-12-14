@@ -64,7 +64,11 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
                 keys.clone().map(|key| hash.hash(key.borrow())).collect(),
                 hash_space,
             ) {
-                return Some(Self::from_raw_parts(hash, unhashed_phf));
+                return Some(Self {
+                    hash,
+                    unhashed_phf,
+                    _marker: PhantomData,
+                });
             }
             // Both increase the hash space and change the hash function. This is especially
             // important for infinite families, which wouldn't progress otherwise.
@@ -97,7 +101,7 @@ impl<T, H> Phf<T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(hash: H, unhashed_phf: UnhashedPhf) -> Self {
+    pub const fn __from_raw_parts(hash: H, unhashed_phf: UnhashedPhf) -> Self {
         Self {
             hash,
             unhashed_phf,
@@ -139,6 +143,6 @@ impl<T, H: super::codegen::Codegen> super::codegen::Codegen for Phf<T, H> {
         let phf = gen.path("h::Phf");
         let hash = gen.piece(&self.hash);
         let unhashed_phf = gen.piece(&self.unhashed_phf);
-        quote::quote!(#phf::from_raw_parts(#hash, #unhashed_phf))
+        quote::quote!(#phf::__from_raw_parts(#hash, #unhashed_phf))
     }
 }

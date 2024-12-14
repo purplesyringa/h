@@ -62,7 +62,13 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
         let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
         super::scatter::scatter(entries, |(key, _)| phf.hash(key), &mut data);
-        Some(Self::from_raw_parts(phf, data.into(), len))
+        Some(Self {
+            inner: MapInner {
+                phf,
+                data: data.into(),
+                len,
+            },
+        })
     }
 
     /// Generate a perfect hash map.
@@ -84,7 +90,7 @@ impl<K, V, H> Map<K, V, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(
+    pub const fn __from_raw_parts(
         phf: Phf<K, H>,
         data: ConstVec<Option<(K, V)>>,
         len: usize,
@@ -269,6 +275,6 @@ impl<K: super::codegen::Codegen, V: super::codegen::Codegen, H: super::codegen::
         let phf = gen.piece(&self.inner.phf);
         let data = gen.piece(&self.inner.data);
         let len = gen.piece(&self.inner.len);
-        quote::quote!(#map::from_raw_parts(#phf, #data, #len))
+        quote::quote!(#map::__from_raw_parts(#phf, #data, #len))
     }
 }

@@ -62,7 +62,13 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
         let phf = Phf::try_from_keys(elements.iter())?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
         super::scatter::scatter(elements, |element| phf.hash(element), &mut data);
-        Some(Self::from_raw_parts(phf, data.into(), len))
+        Some(Self {
+            inner: SetInner {
+                phf,
+                data: data.into(),
+                len,
+            },
+        })
     }
 
     /// Generate a perfect hash set.
@@ -84,7 +90,7 @@ impl<T, H> Set<T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(phf: Phf<T, H>, data: ConstVec<Option<T>>, len: usize) -> Self {
+    pub const fn __from_raw_parts(phf: Phf<T, H>, data: ConstVec<Option<T>>, len: usize) -> Self {
         Self {
             inner: SetInner { phf, data, len },
         }

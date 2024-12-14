@@ -85,7 +85,7 @@ impl GenericHasher {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn from_raw_parts(low: u64, high: u64) -> Self {
+    pub const fn __from_raw_parts(low: u64, high: u64) -> Self {
         Self { low, high }
     }
 }
@@ -338,6 +338,6 @@ impl super::codegen::Codegen for GenericHasher {
         let generic_hasher = gen.path("h::hash::GenericHasher");
         let low = gen.piece(&self.low);
         let high = gen.piece(&self.high);
-        quote::quote!(#generic_hasher::from_raw_parts(#low, #high))
+        quote::quote!(#generic_hasher::__from_raw_parts(#low, #high))
     }
 }

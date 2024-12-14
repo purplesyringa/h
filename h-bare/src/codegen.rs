@@ -267,6 +267,18 @@ impl Default for CodeGenerator {
 /// Values that can be turned into code.
 ///
 /// This trait is a subtrait of `Sized`, as Rust expressions can only evaluate to sized objects.
+///
+///
+/// # Private constructors
+///
+/// Many types don't have public constructors that consume all the stored state. For example,
+/// a hashmap usually doesn't have a public API for building it from a bucket list. In this case,
+/// private constructors are usually used, but generated code can't access it, much like macros.
+///
+/// When such a problem arises, the best way forward is to declare a public constructor with
+/// a mangled name and with `#[doc(hidden)]`. It's usually best not to declare it as `unsafe` even
+/// if semantically it is, as invoking it would make all generated code nested unedr the call
+/// inherit the permissions of the `unsafe` block.
 pub trait Codegen: Sized {
     /// Emit a piece of code corresponding to this value.
     ///

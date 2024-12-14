@@ -79,7 +79,7 @@ We deliberately keep the key format as loose as possible. The goal is to accept 
 
 ### Codegen
 
-We generate code that manually fills fields by calling the `from_raw_parts` methods on `h` types. We don't want to stabilize these methods, and semantically they are `unsafe`, so instead we declare them as `#[doc(hidden)]`.
+We generate code that manually fills fields by calling the `__from_raw_parts` methods on `h` types. We don't want to stabilize these methods, and semantically they are `unsafe`, so instead we declare them as `#[doc(hidden)]`.
 
 
 ### Imperfect hashes
