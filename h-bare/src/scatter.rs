@@ -18,3 +18,17 @@ pub(crate) fn scatter<T>(
         destination[index] = Some(element);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    #[test]
+    fn inverse() {
+        let source = vec![5, 0, 4, 2, 3, 1, 6];
+        let mut destination = vec![None; 7];
+        scatter(source, |&element| element, &mut destination);
+        assert_eq!(destination, (0..=6).map(Some).collect::<Vec<_>>());
+    }
+}
