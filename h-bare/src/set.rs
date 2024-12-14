@@ -145,18 +145,19 @@ impl<T, H> Set<T, H> {
 #[cfg(feature = "serde")]
 mod serde_support {
     use super::{ImperfectHasher, Set, SetInner};
+    use displaydoc::Display;
     use thiserror::Error;
 
     /// Deserialization validation failures.
-    #[derive(Debug, Error)]
+    #[derive(Debug, Display, Error)]
     pub enum Error {
-        #[error("Wrong data length")]
+        /// wrong data length
         WrongDataLength,
 
-        #[error("Wrong len")]
+        /// wrong len
         WrongLen,
 
-        #[error("Misplaced element")]
+        /// misplaced element
         MisplacedElement,
     }
 

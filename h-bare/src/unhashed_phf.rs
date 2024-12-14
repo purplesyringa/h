@@ -142,18 +142,19 @@ impl UnhashedPhf {
 #[cfg(feature = "serde")]
 mod serde_support {
     use super::{UnhashedPhf, UnhashedPhfInner};
+    use displaydoc::Display;
     use thiserror::Error;
 
     /// Deserialization validation failures.
-    #[derive(Debug, Error)]
+    #[derive(Debug, Display, Error)]
     pub enum Error {
-        #[error("Too large bucket_shift value")]
+        /// too large `bucket_shift` value
         TooLargeBucketShift,
 
-        #[error("Wrong displacement count")]
+        /// wrong displacement count
         WrongDisplacementCount,
 
-        #[error("Wrong capacity")]
+        /// wrong capacity
         WrongCapacity,
     }
 

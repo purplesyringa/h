@@ -1,3 +1,5 @@
+//! Permutation utilities.
+
 #![cfg(feature = "build")]
 
 use alloc::vec::Vec;
