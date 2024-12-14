@@ -279,3 +279,66 @@ impl<K: super::codegen::Codegen, V: super::codegen::Codegen, H: super::codegen::
         quote::quote!(#map::__from_raw_parts(#phf, #data, #len))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec::Vec;
+    use rapidhash::RapidRng;
+
+    fn generate_entries(rng: &mut RapidRng) -> Vec<(u64, usize)> {
+        let n_elements: usize = (rng.next() % 10).try_into().unwrap();
+        (0..n_elements).map(|i| (rng.next(), i)).collect()
+    }
+
+    #[test]
+    fn map() {
+        let mut rng = RapidRng::new(0x243f_6a88_85a3_08d3);
+        for _ in 0..50 {
+            let mut entries = generate_entries(&mut rng);
+            let mut h_map: Map<u64, usize> = Map::from_entries(entries.clone());
+
+            for (key, value) in &entries {
+                assert_eq!(h_map.get_key_value(key), Some((key, value)));
+                assert_eq!(h_map.get_key_value_mut(key), Some((key, &mut { *value })));
+                assert_eq!(h_map.get(key), Some(value));
+                assert_eq!(h_map.contains_key(key), true);
+
+                let value_r = h_map.get_mut(key).unwrap();
+                assert_eq!(*value_r, *value);
+                *value_r += 1000;
+                assert_eq!(h_map.get(key).unwrap(), &(value + 1000));
+            }
+            assert_eq!(h_map.len(), entries.len());
+            assert_eq!(h_map.is_empty(), entries.is_empty());
+
+            assert_eq!(h_map.get_key_value(&0), None);
+            assert_eq!(h_map.get_key_value_mut(&0), None);
+            assert_eq!(h_map.get(&0), None);
+            assert_eq!(h_map.get_mut(&0), None);
+            assert_eq!(h_map.contains_key(&0), false);
+
+            for value in h_map.values_mut() {
+                *value -= 1000;
+            }
+
+            let mut entries2: Vec<(u64, usize)> =
+                h_map.iter().map(|(key, value)| (*key, *value)).collect();
+            entries.sort_unstable();
+            entries2.sort_unstable();
+            assert_eq!(entries, entries2);
+
+            let mut keys: Vec<u64> = entries.iter().map(|(key, _)| *key).collect();
+            let mut keys2: Vec<u64> = h_map.keys().copied().collect();
+            keys.sort_unstable();
+            keys2.sort_unstable();
+            assert_eq!(keys, keys2);
+
+            let mut values: Vec<usize> = entries.iter().map(|(_, value)| *value).collect();
+            let mut values2: Vec<usize> = h_map.values().copied().collect();
+            values.sort_unstable();
+            values2.sort_unstable();
+            assert_eq!(values, values2);
+        }
+    }
+}

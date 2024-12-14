@@ -198,3 +198,39 @@ impl<T: super::codegen::Codegen, H: super::codegen::Codegen> super::codegen::Cod
         quote::quote!(#set::__from_raw_parts(#phf, #data, #len))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec::Vec;
+    use rapidhash::RapidRng;
+
+    fn generate_elements(rng: &mut RapidRng) -> Vec<u64> {
+        let n_elements: usize = (rng.next() % 10).try_into().unwrap();
+        (0..n_elements).map(|_| rng.next()).collect()
+    }
+
+    #[test]
+    fn set() {
+        let mut rng = RapidRng::new(0x243f_6a88_85a3_08d3);
+        for _ in 0..50 {
+            let mut elements = generate_elements(&mut rng);
+            let h_set: Set<u64> = Set::from_elements(elements.clone());
+
+            for element in &elements {
+                assert_eq!(h_set.get(element), Some(element));
+                assert_eq!(h_set.contains(element), true);
+            }
+            assert_eq!(h_set.len(), elements.len());
+            assert_eq!(h_set.is_empty(), elements.is_empty());
+
+            assert_eq!(h_set.get(&0), None);
+            assert_eq!(h_set.contains(&0), false);
+
+            let mut elements2: Vec<u64> = h_set.iter().copied().collect();
+            elements.sort_unstable();
+            elements2.sort_unstable();
+            assert_eq!(elements, elements2);
+        }
+    }
+}
