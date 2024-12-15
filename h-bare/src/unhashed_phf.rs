@@ -593,3 +593,36 @@ impl super::codegen::Codegen for Mixer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_mixer() {
+        assert_eq!(Mixer::Add.mix(0x123, 0x456), 0x579);
+        assert_eq!(Mixer::Add.get_hash_space_with_oob(0x123, &[0x456]), 0x579);
+    }
+
+    #[test]
+    fn xor_mixer() {
+        assert_eq!(Mixer::Xor.mix(0x123, 0x456), 0x575);
+
+        for hash_space in 1..0x10 {
+            for displacement1 in 0..0x10 {
+                for displacement2 in 0..0x10 {
+                    let answer = Mixer::Xor
+                        .get_hash_space_with_oob(hash_space, &[displacement1, displacement2]);
+                    let expected = (0..hash_space)
+                        .map(|approx| {
+                            (approx ^ displacement1 as usize).max(approx ^ displacement2 as usize)
+                        })
+                        .max()
+                        .unwrap()
+                        + 1;
+                    assert_eq!(answer, expected);
+                }
+            }
+        }
+    }
+}
