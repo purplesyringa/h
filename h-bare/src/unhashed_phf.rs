@@ -565,14 +565,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn add_mixer() {
+    fn mix() {
         assert_eq!(Mixer::Add.mix(0x123, 0x456), 0x579);
-        assert_eq!(Mixer::Add.get_hash_space_with_oob(0x123, &[0x456]), 0x579);
+        assert_eq!(Mixer::Xor.mix(0x123, 0x456), 0x575);
     }
 
     #[test]
-    fn xor_mixer() {
-        assert_eq!(Mixer::Xor.mix(0x123, 0x456), 0x575);
+    fn get_hash_space_with_oob() {
+        assert_eq!(Mixer::Add.get_hash_space_with_oob(0x123, &[0x456]), 0x579);
 
         for hash_space in 1..0x10 {
             for displacement1 in 0..0x10 {
@@ -587,6 +587,40 @@ mod tests {
                         .unwrap()
                         + 1;
                     assert_eq!(answer, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn find_valid_displacement() {
+        for mixer in [Mixer::Add, Mixer::Xor] {
+            for approx in 0..8 {
+                let mut free = BitMap::new_ones(approx as usize + 65535);
+                for n in 0..512 {
+                    // SAFETY: `free` contains exactly as many bits as required
+                    assert_eq!(
+                        unsafe { mixer.find_valid_displacement(&[approx], &free) },
+                        Some(n),
+                    );
+                    // SAFETY: `approx + n < free.len()`
+                    unsafe {
+                        free.reset_unchecked(mixer.mix(approx, n));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mixer_no_oob() {
+        for mixer in [Mixer::Add, Mixer::Xor] {
+            let mut free = BitMap::new_ones(65535);
+            // SAFETY: `free` contains exactly as many bits as required
+            while let Some(n) = unsafe { mixer.find_valid_displacement(&[0], &free) } {
+                // SAFETY: `n < free.len()`
+                unsafe {
+                    free.reset_unchecked(n as usize);
                 }
             }
         }
