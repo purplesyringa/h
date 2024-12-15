@@ -115,15 +115,9 @@ impl UnhashedPhf {
     #[inline]
     #[must_use]
     pub fn hash(&self, key: u64) -> usize {
-        let product = multiply_scale(key, self.inner.hash_space);
-        let approx = (product >> 64i32) as u64;
-        #[allow(clippy::cast_possible_truncation, reason = "intentional")]
-        let bucket = (product as u64) >> self.inner.bucket_shift;
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "bucket < displacements.len() <= usize::MAX"
-        )]
-        let displacement = unsafe { *self.inner.displacements.get_unchecked(bucket as usize) };
+        let (approx, bucket) =
+            to_approx_bucket(key, self.inner.hash_space, self.inner.bucket_shift);
+        let displacement = unsafe { *self.inner.displacements.get_unchecked(bucket) };
         self.inner.mixer.mix(approx, displacement)
     }
 
@@ -191,7 +185,7 @@ struct Buckets {
     approxs: Vec<u64>,
 
     /// Buckets, grouped by size. The tuple is `(Bucket, size)`.
-    by_size: Vec<Vec<(u64, usize)>>,
+    by_size: Vec<Vec<(usize, usize)>>,
 
     /// The `hash_space` parameter this object is valid under
     hash_space: usize,
@@ -250,28 +244,26 @@ impl Buckets {
         }
 
         // We'll store per-size bucket lists here
-        let mut by_size: Vec<Vec<(u64, usize)>> = Vec::new();
+        let mut by_size: Vec<Vec<(usize, usize)>> = Vec::new();
 
         // A manual group_by implementation, just two pointers. `product` always stores the product
         // for the currently processed element.
-        let mut product = multiply_scale(keys[0], hash_space);
+        let mut bucket;
+        (keys[0], bucket) = to_approx_bucket(keys[0], hash_space, bucket_shift);
+
         let mut left = 0;
         while left < keys.len() {
-            #[allow(clippy::cast_possible_truncation, reason = "intentional")]
-            let bucket = product as u64 >> bucket_shift;
-
-            // Replace the key with its Approx value in-place for future use. We have already
-            // computed the product, so this is cheap.
-            keys[left] = (product >> 64i32) as u64;
+            let current_bucket = bucket;
 
             // Keep going while the key has the same bucket as the previous one
             let mut right = left + 1;
             #[allow(clippy::cast_possible_truncation, reason = "intentional")]
             while right < keys.len() && {
-                product = multiply_scale(keys[right], hash_space);
-                bucket == product as u64 >> bucket_shift
+                // Replace the key with its Approx value in-place for future use. We have already
+                // computed the product, so this is cheap.
+                (keys[right], bucket) = to_approx_bucket(keys[right], hash_space, bucket_shift);
+                bucket == current_bucket
             } {
-                keys[right] = (product >> 64i32) as u64;
                 right += 1;
             }
 
@@ -291,7 +283,7 @@ impl Buckets {
             while by_size.len() <= size {
                 by_size.push(Vec::new());
             }
-            by_size[size].push((bucket, left));
+            by_size[size].push((current_bucket, left));
             left = right;
         }
 
@@ -307,7 +299,7 @@ impl Buckets {
     /// Iterate over buckets in decreasing size order.
     ///
     /// Yields `(Bucket, [Approx])`.
-    fn iter(&self) -> impl Iterator<Item = (u64, &[u64])> {
+    fn iter(&self) -> impl Iterator<Item = (usize, &[u64])> {
         self.by_size
             .iter()
             .enumerate()
@@ -339,7 +331,7 @@ impl Buckets {
                 reason = "bucket < displacements.len() <= usize::MAX"
             )]
             {
-                displacements[bucket as usize] = displacement;
+                displacements[bucket] = displacement;
             }
 
             for approx in approx_for_bucket {
@@ -365,12 +357,16 @@ impl Buckets {
     }
 }
 
-/// Multiply `u64` by `usize`, producing a `u128`.
-///
-/// Semantically produces a number with the top half in range `[0; b)`, "scaling" the input from
-/// `[0; 1)` to `[0; b)` in 64.64 fixed-point.
-const fn multiply_scale(a: u64, b: usize) -> u128 {
-    a as u128 * b as u128
+/// Convert a 64-bit hash to `(Approx, Bucket)`.
+const fn to_approx_bucket(hash: u64, hash_space: usize, bucket_shift: u32) -> (u64, usize) {
+    let product = hash as u128 * hash_space as u128;
+    #[allow(clippy::cast_possible_truncation, reason = "intentional")]
+    let (high, low) = ((product >> 64i32) as u64, product as u64);
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Bucket is guaranteed to fill in usize"
+    )]
+    (high, (low >> bucket_shift) as usize)
 }
 
 /// Algorithm for mixing displacement with the approximate position
@@ -563,6 +559,11 @@ impl super::codegen::Codegen for Mixer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_to_approx_bucket() {
+        assert_eq!(to_approx_bucket(0x1289f3da73209aad, 12345, 53), (893, 2035));
+    }
 
     #[test]
     fn mix() {
