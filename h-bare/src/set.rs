@@ -70,7 +70,7 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
         Some(Self {
             inner: SetInner {
                 phf,
-                data: data.into(),
+                data: ConstVec::from_vec(data),
                 len,
             },
         })

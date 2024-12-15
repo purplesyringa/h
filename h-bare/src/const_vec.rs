@@ -42,7 +42,7 @@ unsafe impl<T: Send> Send for ConstVec<T> {}
 // `&'static [T]: Sync`.
 unsafe impl<T: Sync> Sync for ConstVec<T> {}
 
-impl<T: Sync> ConstVec<T> {
+impl<T> ConstVec<T> {
     /// Initialize the vector from static data.
     ///
     /// Note that this method requires `T` to be [`Sync`]. This is because:
@@ -57,16 +57,27 @@ impl<T: Sync> ConstVec<T> {
     /// To prevent this unsoundness, we require that `T: Sync`. `T: Send => T: Sync` would also
     /// work, but Rust cannot express this constraint.
     #[inline]
-    pub const fn from_static_ref(arr: &'static [T]) -> Self {
+    pub const fn from_static_ref(arr: &'static [T]) -> Self
+    where
+        T: Sync,
+    {
         Self::CompileTime(arr)
     }
-}
 
-#[cfg(feature = "alloc")]
-impl<T> From<alloc::vec::Vec<T>> for ConstVec<T> {
+    /// Initialize the vector from runtime data.
+    #[cfg(feature = "alloc")]
     #[inline]
-    fn from(vec: alloc::vec::Vec<T>) -> Self {
+    pub const fn from_vec(vec: alloc::vec::Vec<T>) -> Self {
         Self::RunTime(vec)
+    }
+
+    /// Initialize the vector from runtime data.
+    #[cfg(not(feature = "alloc"))]
+    #[inline]
+    pub const fn from_vec(_vec: impl Deref<Target = [T]>) -> Self {
+        const {
+            panic!("`h` feature `alloc` is not enabled");
+        }
     }
 }
 
@@ -106,7 +117,9 @@ impl<T: super::codegen::Codegen> super::codegen::Codegen for ConstVec<T> {
         let data = gen.array(&**self);
         if gen.mutability() {
             let vec = gen.path("alloc::vec");
-            quote::quote!(#const_vec::from(#vec!#data))
+            // This is a method invocation instead of a `From::from` call so that we get a slightly
+            // better diagnostic when `h` is compiled without `-F alloc`.
+            quote::quote!(#const_vec::from_vec(#vec!#data))
         } else {
             quote::quote!(#const_vec::from_static_ref(&#data))
         }
@@ -162,7 +175,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn runtime() {
-        let mut values = ConstVec::from(alloc::vec!["meow", "nya", "cutie"]);
+        let mut values = ConstVec::from_vec(alloc::vec!["meow", "nya", "cutie"]);
         assert_eq!(values.get(0), Some(&"meow"));
         assert_eq!(values.get(1), Some(&"nya"));
         assert_eq!(values.get(2), Some(&"cutie"));

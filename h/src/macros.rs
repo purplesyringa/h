@@ -143,10 +143,17 @@ macro_rules_map! {
     };
 }
 
-#[cfg(not(doc))]
+#[cfg(all(not(doc), feature = "alloc"))]
 macro_rules_map! {
     ($($tt:tt)*) => {
         $crate::macros::h_macros::map!(crate $crate; $($tt)*)
+    };
+}
+
+#[cfg(all(not(doc), not(feature = "alloc")))]
+macro_rules_map! {
+    ($($tt:tt)*) => {
+        $crate::macros::h_macros::map!(no_alloc; crate $crate; $($tt)*)
     };
 }
 
@@ -242,8 +249,6 @@ pub use set;
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     #[test]
     fn macros() {
         const MAP: &h::Map<u64, usize> = map! {
@@ -255,16 +260,6 @@ mod tests {
         assert_eq!(MAP.get(&456), Some(&1));
         assert_eq!(MAP.get(&789), None);
 
-        let map = map! {
-            mut;
-            "hello" => Mutex::new(1),
-            "world" => Mutex::new(2),
-        };
-
-        let mutex = map.get("hello").unwrap();
-        let guard = mutex.lock().unwrap();
-        assert_eq!(*guard, 1);
-
         const SET: &h::Set<u64> = set!(for u64; 123, 456);
         assert!(SET.contains(&123));
         assert!(SET.contains(&456));
@@ -272,6 +267,28 @@ mod tests {
 
         const PHF: &h::Phf<u64> = phf!(for u64; 123, 456);
         assert_ne!(PHF.hash(&123), PHF.hash(&456));
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn mut_map() {
+        struct NotConstConstructible {
+            value: i32,
+        }
+
+        impl NotConstConstructible {
+            fn new(value: i32) -> Self {
+                Self { value }
+            }
+        }
+
+        let map = map! {
+            mut;
+            "hello" => NotConstConstructible::new(1),
+            "world" => NotConstConstructible::new(2),
+        };
+        let entry = map.get("hello").unwrap();
+        assert_eq!(entry.value, 1);
     }
 
     #[test]

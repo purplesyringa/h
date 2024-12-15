@@ -352,7 +352,7 @@ impl Buckets {
                 hash_space: self.hash_space,
                 hash_space_with_oob,
                 bucket_shift: self.bucket_shift,
-                displacements: displacements.into(),
+                displacements: ConstVec::from_vec(displacements),
                 mixer,
             },
         })

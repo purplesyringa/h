@@ -70,7 +70,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
         Some(Self {
             inner: MapInner {
                 phf,
-                data: data.into(),
+                data: ConstVec::from_vec(data),
                 len,
             },
         })

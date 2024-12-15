@@ -21,13 +21,25 @@ impl Parse for MapArm {
 
 #[derive(Debug)]
 pub struct Context {
+    pub no_alloc: bool,
     pub h_crate: Option<Path>,
     pub key_type: Option<Type>,
     pub mutability: Option<Token![mut]>,
 }
 
+mod kw {
+    syn::custom_keyword!(no_alloc);
+}
+
 impl Parse for Context {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let no_alloc = if input.parse::<kw::no_alloc>().is_ok() {
+            input.parse::<Token![;]>()?;
+            true
+        } else {
+            false
+        };
+
         let h_crate = if input.parse::<Token![crate]>().is_ok() {
             let path = input.parse::<Path>()?;
             input.parse::<Token![;]>()?;
@@ -52,6 +64,7 @@ impl Parse for Context {
         };
 
         Ok(Self {
+            no_alloc,
             h_crate,
             key_type,
             mutability,

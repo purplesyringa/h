@@ -164,6 +164,15 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let input = parse_macro_input!(item as WithContext<MapArm>);
 
+    if input.context.no_alloc {
+        if let Some(token) = &input.context.mutability {
+            emit_error!(
+                token,
+                "`mut;` requires the `h` crate feature `alloc` to be enabled",
+            );
+        }
+    }
+
     let key_type = if let Some(ty) = &input.context.key_type {
         ty.to_token_stream()
     } else {
