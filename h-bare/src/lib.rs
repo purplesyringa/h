@@ -10,6 +10,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+pub(crate) mod bitmap;
 pub mod codegen;
 mod const_vec;
 pub mod hash;

@@ -2,7 +2,7 @@
 
 #![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
 
-use super::const_vec::ConstVec;
+use super::{bitmap::BitMap, const_vec::ConstVec};
 
 #[cfg(feature = "build")]
 use alloc::{vec, vec::Vec};
@@ -324,8 +324,7 @@ impl Buckets {
     /// Hash space must be at least somewhat larger than the number of keys.
     fn try_generate_phf(&self, mixer: Mixer) -> Option<UnhashedPhf> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
-        let alloc = self.hash_space + u16::MAX as usize;
-        let mut free = vec![u8::MAX; alloc.div_ceil(8)];
+        let mut free = BitMap::new_ones(self.hash_space + u16::MAX as usize);
 
         // We'll fill this per-bucket array during the course of the algorithm
         let mut displacements = vec![0; self.bucket_count];
@@ -333,8 +332,7 @@ impl Buckets {
         // Handle buckets
         for (bucket, approx_for_bucket) in self.iter() {
             // Find non-colliding displacement. On failure, return None.
-            let displacement =
-                unsafe { mixer.find_valid_displacement(approx_for_bucket, free.as_ptr()) }?;
+            let displacement = unsafe { mixer.find_valid_displacement(approx_for_bucket, &free) }?;
 
             #[allow(
                 clippy::cast_possible_truncation,
@@ -346,7 +344,10 @@ impl Buckets {
 
             for approx in approx_for_bucket {
                 let index = mixer.mix(*approx, displacement);
-                *unsafe { free.get_unchecked_mut(index / 8) } &= !(1 << (index % 8));
+                // SAFETY: `index < hash_space_with_oob <= hash_space + (2^16 - 1)`
+                unsafe {
+                    free.reset_unchecked(index);
+                }
             }
         }
 
@@ -403,12 +404,12 @@ impl Mixer {
     ///
     /// # Safety
     ///
-    /// `free` as a bitmap must be large enough to fit `approx + 65535`.
+    /// `free` must contain at least `approx + 65535` bits.
     #[cfg(feature = "build")]
     unsafe fn find_valid_displacement(
         self,
         approx_for_bucket: &[u64],
-        free: *const u8,
+        free: &BitMap,
     ) -> Option<u16> {
         match self {
             Self::Add => {
@@ -429,12 +430,9 @@ impl Mixer {
     ///
     /// # Safety
     ///
-    /// `free` as a bitmap must be large enough to fit `approx + 65535`.
+    /// `free` must contain at least `approx + 65535` bits.
     #[cfg(feature = "build")]
-    unsafe fn find_valid_displacement_add(
-        approx_for_bucket: &[u64],
-        free: *const u8,
-    ) -> Option<u16> {
+    unsafe fn find_valid_displacement_add(approx_for_bucket: &[u64], free: &BitMap) -> Option<u16> {
         // Outer unrolled loop
         for displacement_base_index in 0..u16::MAX / 57 {
             // We don't iterate through a few of the top 65536 displacements, but that's noise
@@ -452,9 +450,12 @@ impl Mixer {
                     reason = "approx + 65535 < hash_space + 65535 <= usize::MAX"
                 )]
                 let start = *approx as usize + displacement_base as usize;
-                let bit_mask =
-                    unsafe { free.wrapping_add(start / 8).cast::<u64>().read_unaligned() }
-                        >> (start % 8);
+                let bit_mask = unsafe {
+                    free.as_byte_ptr()
+                        .wrapping_add(start / 8)
+                        .cast::<u64>()
+                        .read_unaligned()
+                } >> (start % 8);
                 global_bit_mask &= bit_mask;
             }
 
@@ -475,12 +476,9 @@ impl Mixer {
     ///
     /// # Safety
     ///
-    /// `free` as a bitmap must be large enough to fit `approx + 65535`.
+    /// `free` must contain at least `approx + 65535` bits.
     #[cfg(feature = "build")]
-    unsafe fn find_valid_displacement_xor(
-        approx_for_bucket: &[u64],
-        free: *const u8,
-    ) -> Option<u16> {
+    unsafe fn find_valid_displacement_xor(approx_for_bucket: &[u64], free: &BitMap) -> Option<u16> {
         // Outer unrolled loop
         for displacement_base in (0..=u16::MAX).step_by(8) {
             let mut global_bit_mask = u8::MAX;
@@ -494,7 +492,8 @@ impl Mixer {
                 let approx = *approx as usize;
                 // Inner unrolled loop, aka bitmask logic
                 let bit_mask = unsafe {
-                    free.wrapping_add((approx ^ displacement_base as usize) / 8)
+                    free.as_byte_ptr()
+                        .wrapping_add((approx ^ displacement_base as usize) / 8)
                         .read()
                 };
                 global_bit_mask &= BIT_INDEX_XOR_LUT[approx % 8][bit_mask as usize];
