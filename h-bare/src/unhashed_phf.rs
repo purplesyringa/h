@@ -414,95 +414,62 @@ impl Mixer {
         match self {
             Self::Add => {
                 // SAFETY: Safety requirements forwarded.
-                unsafe { Self::find_valid_displacement_add(approx_for_bucket, free) }
+                unsafe { Self::find_valid_displacement_mono::<true>(approx_for_bucket, free) }
             }
             Self::Xor => {
                 // SAFETY: Safety requirements forwarded.
-                unsafe { Self::find_valid_displacement_xor(approx_for_bucket, free) }
+                unsafe { Self::find_valid_displacement_mono::<false>(approx_for_bucket, free) }
             }
         }
     }
 
-    /// Find a valid displacement for the [`Self::Add`] mixer.
+    /// Find a valid displacement.
     ///
-    /// Returns `displacement` such that `mix(approx, displacement)` is marked as free in the
-    /// bitmap for each `approx` in the list. On failure, returns `None`.
-    ///
-    /// # Safety
-    ///
-    /// `free` must contain at least `approx + 65535` bits.
-    #[cfg(feature = "build")]
-    unsafe fn find_valid_displacement_add(approx_for_bucket: &[u64], free: &BitMap) -> Option<u16> {
-        // Outer unrolled loop
-        for displacement_base_index in 0..u16::MAX / 57 {
-            // We don't iterate through a few of the top 65536 displacements, but that's noise
-            let displacement_base = displacement_base_index * 57;
-
-            // Can't trust bits farther than the first 57, because we shift out up to 7 bits,
-            // shifting in meaningless zeros
-            let mut global_bit_mask = (1 << 57i32) - 1;
-
-            // Iterate over keys
-            for approx in approx_for_bucket {
-                // Inner unrolled loop, aka bitmask logic
-                #[allow(
-                    clippy::cast_possible_truncation,
-                    reason = "approx + 65535 < hash_space + 65535 <= usize::MAX"
-                )]
-                let start = *approx as usize + displacement_base as usize;
-                let bit_mask = unsafe {
-                    free.as_byte_ptr()
-                        .wrapping_add(start / 8)
-                        .cast::<u64>()
-                        .read_unaligned()
-                } >> (start % 8);
-                global_bit_mask &= bit_mask;
-            }
-
-            if global_bit_mask != 0 {
-                #[allow(clippy::cast_possible_truncation, reason = "false positive")]
-                let displacement_offset = global_bit_mask.trailing_zeros() as u16;
-                return Some(displacement_base + displacement_offset);
-            }
-        }
-
-        None
-    }
-
-    /// Find a valid displacement for the [`Self::Xor`] mixer.
-    ///
-    /// Returns `displacement` such that `mix(approx, displacement)` is marked as free in the
-    /// bitmap for each `approx` in the list. On failure, returns `None`.
+    /// This is a monomorphised version of
+    /// [`find_valid_displacement`](Self::find_valid_displacement).
     ///
     /// # Safety
     ///
-    /// `free` must contain at least `approx + 65535` bits.
+    /// See docs for [`find_valid_displacement`](Self::find_valid_displacement).
     #[cfg(feature = "build")]
-    unsafe fn find_valid_displacement_xor(approx_for_bucket: &[u64], free: &BitMap) -> Option<u16> {
-        // Outer unrolled loop
-        for displacement_base in (0..=u16::MAX).step_by(8) {
-            let mut global_bit_mask = u8::MAX;
+    unsafe fn find_valid_displacement_mono<const IS_ADD: bool>(
+        approx_for_bucket: &[u64],
+        free: &BitMap,
+    ) -> Option<u16> {
+        let this = if IS_ADD { Self::Add } else { Self::Xor };
+
+        let displacement_bases = match this {
+            Self::Add => {
+                // We don't iterate through a few of the top 65536 displacements to avoid going out
+                // of bounds, but that's noise
+                (0..=u16::MAX - 57).step_by(57)
+            }
+            Self::Xor => (0..=u16::MAX).step_by(8),
+        };
+
+        for displacement_base in displacement_bases {
+            let mut global_free_mask = u64::MAX;
 
             // Iterate over keys
             for approx in approx_for_bucket {
-                #[allow(
-                    clippy::cast_possible_truncation,
-                    reason = "approx + 65535 < hash_space + 65535 <= usize::MAX"
-                )]
-                let approx = *approx as usize;
-                // Inner unrolled loop, aka bitmask logic
-                let bit_mask = unsafe {
-                    free.as_byte_ptr()
-                        .wrapping_add((approx ^ displacement_base as usize) / 8)
-                        .read()
+                let start = this.mix(*approx, displacement_base);
+                let p = free.as_byte_ptr().wrapping_add(start / 8);
+
+                // `local_free_mask[i]` indicates whether `mix(approx, displacement_base + i)` is
+                // free. The bottom 57/8 bits need to be exact; the top bits may contain false
+                // negatives.
+                let local_free_mask = match this {
+                    Self::Add => (unsafe { p.cast::<u64>().read_unaligned() }) >> (start % 8),
+                    Self::Xor => BIT_INDEX_XOR_LUT[start % 8][unsafe { p.read() } as usize].into(),
                 };
-                global_bit_mask &= BIT_INDEX_XOR_LUT[approx % 8][bit_mask as usize];
+
+                global_free_mask &= local_free_mask;
             }
 
-            // Find the first applicable displacement (i.e. such that all `free` values are 1)
-            if global_bit_mask != 0 {
+            // If `approx_for_bucket` is empty, this immediately returns `Some(0)`.
+            if global_free_mask != 0 {
                 #[allow(clippy::cast_possible_truncation, reason = "false positive")]
-                let displacement_offset = global_bit_mask.trailing_zeros() as u16;
+                let displacement_offset = global_free_mask.trailing_zeros() as u16;
                 return Some(displacement_base + displacement_offset);
             }
         }
