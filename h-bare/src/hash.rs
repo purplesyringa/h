@@ -229,11 +229,8 @@ macro_rules! impl_primitive_128 {
                 }
 
                 #[inline]
-                #[allow(
-                    clippy::cast_possible_truncation,
-                    clippy::cast_sign_loss,
-                    reason = "intentional"
-                )]
+                #[expect(clippy::cast_possible_truncation, reason = "intentional")]
+                #[allow(clippy::cast_sign_loss, reason = "intentional")]
                 fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
                     let low = *self as u64;
                     let high = (*self >> 64i32) as u64;
@@ -268,7 +265,7 @@ impl PortableHash for isize {
 
     #[inline]
     fn hash_generic_exclusive(&self, hasher: &GenericHasher) -> u64 {
-        #[allow(clippy::cast_sign_loss, reason = "intentional")]
+        #[expect(clippy::cast_sign_loss, reason = "intentional")]
         (*self as u64).wrapping_mul(hasher.low)
     }
 }

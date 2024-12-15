@@ -1,4 +1,4 @@
-#![allow(
+#![expect(
     clippy::shadow_unrelated,
     reason = "https://github.com/rust-lang/rust-clippy/issues/11827"
 )]
@@ -36,7 +36,7 @@ impl State {
                 let fits = match integer_type_node.range() {
                     Ok(range) =>
                     {
-                        #[allow(clippy::cast_sign_loss, reason = "intended")]
+                        #[expect(clippy::cast_sign_loss, reason = "intended")]
                         if *negated {
                             as_u128 >= *range.start() as u128
                         } else {
@@ -58,8 +58,8 @@ impl State {
                     return;
                 }
 
-                #[allow(clippy::cast_possible_truncation, reason = "checked to not occur")]
-                #[allow(clippy::cast_possible_wrap, reason = "intended")]
+                #[expect(clippy::cast_possible_truncation, reason = "checked to not occur")]
+                #[expect(clippy::cast_possible_wrap, reason = "intended")]
                 match integer_type_node {
                     IntegerTypeNode::U8 => self.data.write_u8(as_u128 as u8),
                     IntegerTypeNode::U16 => self.data.write_u16::<NE>(as_u128 as u16),

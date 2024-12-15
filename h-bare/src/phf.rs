@@ -37,11 +37,11 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     ///
     /// Panics if `keys` contains more than `isize::MAX / 2` elements.
     #[inline]
-    #[allow(
+    #[expect(
         clippy::needless_pass_by_value,
         reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
     )]
-    #[allow(clippy::arithmetic_side_effects, reason = "asserted")]
+    #[expect(clippy::arithmetic_side_effects, reason = "asserted")]
     pub fn try_from_keys(
         keys: impl ExactSizeIterator<Item = impl Borrow<T>> + Clone,
     ) -> Option<Self> {
@@ -88,10 +88,6 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     /// Panics if `keys` contains more than `isize::MAX / 2` elements, or if the underlying
     /// imperfect hash function family is finite and generation didn't succeed.
     #[inline]
-    #[allow(
-        clippy::needless_pass_by_value,
-        reason = "passing a reference here would complicate the API for no real gain, as a reference can implement this trait anyway"
-    )]
     pub fn from_keys(keys: impl ExactSizeIterator<Item = impl Borrow<T>> + Clone) -> Self {
         Self::try_from_keys(keys).expect("ran out of imperfect hash family instances")
     }

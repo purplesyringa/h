@@ -1,8 +1,3 @@
-#![allow(
-    clippy::shadow_unrelated,
-    reason = "https://github.com/rust-lang/rust-clippy/issues/13795"
-)]
-
 use super::{
     constants::get_constant,
     types::{type_ptr, IntegerTypeNode, Node, NodePtr, NodeWithSpan, TypeNode, TypePtr},

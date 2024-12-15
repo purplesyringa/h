@@ -18,9 +18,12 @@ use core::borrow::Borrow;
         try_from = "SetInner<T, H>"
     )
 )]
-#[allow(
-    clippy::unsafe_derive_deserialize,
-    reason = "safety requirements are validated using TryFrom"
+#[cfg_attr(
+    feature = "serde",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "safety requirements are validated using TryFrom"
+    )
 )]
 pub struct Set<T, H = GenericHasher> {
     /// The actual set.

@@ -1,4 +1,4 @@
-#![allow(
+#![expect(
     clippy::shadow_unrelated,
     reason = "https://github.com/rust-lang/rust-clippy/issues/11827"
 )]

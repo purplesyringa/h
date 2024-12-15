@@ -18,9 +18,12 @@ use core::borrow::Borrow;
         try_from = "MapInner<K, V, H>"
     )
 )]
-#[allow(
-    clippy::unsafe_derive_deserialize,
-    reason = "safety requirements are validated using TryFrom"
+#[cfg_attr(
+    feature = "serde",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "safety requirements are validated using TryFrom"
+    )
 )]
 pub struct Map<K, V, H = GenericHasher> {
     /// The actual map.

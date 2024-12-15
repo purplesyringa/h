@@ -119,7 +119,7 @@ impl CodeGenerator {
     /// 3. We use `extern crate alloc`, as `::alloc` is unavailable without special configuration.
     ///    This statement is only added if `alloc` is actually requested by codegen, as we support
     ///    no-std/no-alloc environments, too.
-    #[allow(dead_code, clippy::missing_const_for_fn, reason = "docs hack")]
+    #[expect(clippy::missing_const_for_fn, reason = "docs hack")]
     fn __private_docs() {}
 
     /// Create a code generator with default settings.
@@ -165,7 +165,7 @@ impl CodeGenerator {
 
     /// Turn a value into code.
     #[inline]
-    #[allow(clippy::missing_panics_doc, reason = "false positive")]
+    #[expect(clippy::missing_panics_doc, reason = "false positive")]
     pub fn generate<T: Codegen>(mut self, value: &T) -> TokenStream {
         let value = self.piece(value);
 
@@ -198,13 +198,13 @@ impl CodeGenerator {
             // nested braces enable attributes on expressions on stable
             {
                 // workaround `unused_braces` warning
-                #[allow(
+                #[expect(
                     clippy::allow_attributes_without_reason,
                     clippy::no_effect
                 )]
                 ();
 
-                #[allow(
+                #[expect(
                     clippy::decimal_literal_representation,
                     clippy::allow_attributes_without_reason,
                     clippy::unreadable_literal,
@@ -245,7 +245,7 @@ impl CodeGenerator {
     /// - This method replaces long paths with short aliases imported just once with `use`, reducing
     ///   code size.
     #[inline]
-    #[allow(
+    #[expect(
         clippy::maybe_infinite_iter,
         clippy::missing_panics_doc,
         reason = "false positive"
@@ -499,7 +499,7 @@ macro_rules! tuple {
     ($(($name:tt $index:tt))*) => {
         impl<$($name: Codegen),*> Codegen for ($($name,)*) {
             #[inline]
-            #[allow(non_snake_case, reason = "codegen")]
+            #[expect(non_snake_case, reason = "codegen")]
             fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
                 $(let $name = gen.piece(&self.$index);)*
                 quote!(($(#$name),*))

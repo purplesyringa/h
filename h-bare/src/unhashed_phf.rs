@@ -1,6 +1,6 @@
 //! Perfect hash functions with untyped inputs.
 
-#![allow(clippy::arithmetic_side_effects, reason = "many false positives")]
+#![expect(clippy::arithmetic_side_effects, reason = "many false positives")]
 
 use super::{bitmap::BitMap, const_vec::ConstVec};
 
@@ -17,9 +17,12 @@ const _: () = assert!(
 ///
 /// This PHF does not hash keys for you.
 #[derive(Clone, Debug)]
-#[allow(
-    clippy::unsafe_derive_deserialize,
-    reason = "safety requirements are validated using TryFrom"
+#[cfg_attr(
+    feature = "serde",
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "safety requirements are validated using TryFrom"
+    )
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "UnhashedPhfInner"))]
@@ -81,7 +84,7 @@ impl UnhashedPhf {
     ///
     /// If there are duplicates in `keys`, returns `None`.
     #[cfg(feature = "build")]
-    #[allow(
+    #[expect(
         clippy::missing_inline_in_public_items,
         reason = "very heavy, we'd rather not copy it to every crate"
     )]
@@ -228,13 +231,13 @@ impl Buckets {
         let key_to_bucket = |key: u64| key.wrapping_mul(hash_space as u64) >> bucket_shift;
         // Reduce the number of iterations
         if bucket_count <= 1 << 16i32 {
-            #[allow(
+            #[expect(
                 clippy::cast_possible_truncation,
                 reason = "bucket < bucket_size <= 2^16"
             )]
             radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u16);
         } else if bucket_count <= 1 << 32i32 {
-            #[allow(
+            #[expect(
                 clippy::cast_possible_truncation,
                 reason = "bucket < bucket_size <= 2^32"
             )]
@@ -257,7 +260,6 @@ impl Buckets {
 
             // Keep going while the key has the same bucket as the previous one
             let mut right = left + 1;
-            #[allow(clippy::cast_possible_truncation, reason = "intentional")]
             while right < keys.len() && {
                 // Replace the key with its Approx value in-place for future use. We have already
                 // computed the product, so this is cheap.
@@ -325,14 +327,7 @@ impl Buckets {
         for (bucket, approx_for_bucket) in self.iter() {
             // Find non-colliding displacement. On failure, return None.
             let displacement = unsafe { mixer.find_valid_displacement(approx_for_bucket, &free) }?;
-
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "bucket < displacements.len() <= usize::MAX"
-            )]
-            {
-                displacements[bucket] = displacement;
-            }
+            displacements[bucket] = displacement;
 
             for approx in approx_for_bucket {
                 let index = mixer.mix(*approx, displacement);
@@ -360,9 +355,9 @@ impl Buckets {
 /// Convert a 64-bit hash to `(Approx, Bucket)`.
 const fn to_approx_bucket(hash: u64, hash_space: usize, bucket_shift: u32) -> (u64, usize) {
     let product = hash as u128 * hash_space as u128;
-    #[allow(clippy::cast_possible_truncation, reason = "intentional")]
+    #[expect(clippy::cast_possible_truncation, reason = "intentional")]
     let (high, low) = ((product >> 64i32) as u64, product as u64);
-    #[allow(
+    #[expect(
         clippy::cast_possible_truncation,
         reason = "Bucket is guaranteed to fill in usize"
     )]
@@ -371,7 +366,10 @@ const fn to_approx_bucket(hash: u64, hash_space: usize, bucket_shift: u32) -> (u
 
 /// Algorithm for mixing displacement with the approximate position
 #[derive(Copy, Clone, Debug)]
-#[allow(clippy::unsafe_derive_deserialize, reason = "plain old data")]
+#[cfg_attr(
+    feature = "serde",
+    expect(clippy::unsafe_derive_deserialize, reason = "plain old data")
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 #[doc(hidden)]
@@ -383,7 +381,7 @@ pub enum Mixer {
 impl Mixer {
     /// Mix `Approx` with a displacement to get the final hash.
     const fn mix(self, approx: u64, displacement: u16) -> usize {
-        #[allow(
+        #[expect(
             clippy::cast_possible_truncation,
             reason = "approx + 65535 < hash_space + 65535 <= usize::MAX"
         )]
@@ -464,7 +462,7 @@ impl Mixer {
 
             // If `approx_for_bucket` is empty, this immediately returns `Some(0)`.
             if global_free_mask != 0 {
-                #[allow(clippy::cast_possible_truncation, reason = "false positive")]
+                #[expect(clippy::cast_possible_truncation, reason = "false positive")]
                 let displacement_offset = global_free_mask.trailing_zeros() as u16;
                 return Some(displacement_base + displacement_offset);
             }
@@ -510,7 +508,7 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
         let mut bit_mask = 0;
         while bit_mask < 256 {
             let mut bit_index = 0;
-            #[allow(clippy::cast_possible_truncation, reason = "bit_mask < 256")]
+            #[expect(clippy::cast_possible_truncation, reason = "bit_mask < 256")]
             while bit_index < 8 {
                 lut[xor][bit_mask] |= ((bit_mask as u8 >> bit_index) & 1) << (bit_index ^ xor);
                 bit_index += 1;

@@ -1,5 +1,4 @@
-#![allow(clippy::std_instead_of_alloc, reason = "we're not in #[no_std]")]
-#![allow(clippy::wildcard_enum_match_arm, reason = "too many false positives")]
+#![expect(clippy::wildcard_enum_match_arm, reason = "too many false positives")]
 
 mod coding;
 mod constants;
@@ -25,6 +24,7 @@ use quote::{quote, ToTokens};
 use std::collections::HashMap;
 use syn::{parse_macro_input, spanned::Spanned, Expr};
 
+#[expect(clippy::needless_pass_by_value, reason = "needlessly complicates API")]
 fn parse_keys<'a>(
     context: &Context,
     keys: impl Iterator<Item = &'a Expr> + Clone,
