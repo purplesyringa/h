@@ -11,7 +11,8 @@ use core::marker::PhantomData;
 ///
 /// A mapping from `T` to numbers from `0` to `N - 1`, injective over the training key set. `N`
 /// might be larger than the size of the training key set.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
 pub struct Phf<T, H = GenericHasher> {
     /// The hasher, mapping `T` to a numeric imperfect hash.
     hash: H,

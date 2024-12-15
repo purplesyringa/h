@@ -8,9 +8,10 @@ use super::{
 use core::borrow::Borrow;
 
 /// A perfect hash set.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
 #[cfg_attr(
-    feature = "serde",
+    all(feature = "alloc", feature = "serde"),
     serde(
         bound(
             deserialize = "T: serde::Deserialize<'de>, H: serde::Deserialize<'de> + ImperfectHasher<T>"
@@ -19,7 +20,7 @@ use core::borrow::Borrow;
     )
 )]
 #[cfg_attr(
-    feature = "serde",
+    all(feature = "alloc", feature = "serde"),
     expect(
         clippy::unsafe_derive_deserialize,
         reason = "safety requirements are validated using TryFrom"
@@ -34,7 +35,8 @@ pub struct Set<T, H = GenericHasher> {
 ///
 /// This needs to be a separate type so that `serde` can convert from this type to [`Set`] with
 /// [`TryFrom`] during deserialization, so that we can validate the set.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
 struct SetInner<T, H> {
     /// A PHF mapping values to indices in [`data`](Self::data).
     phf: Phf<T, H>,
@@ -145,7 +147,7 @@ impl<T, H> Set<T, H> {
 }
 
 /// Scope for `serde`-related code.
-#[cfg(feature = "serde")]
+#[cfg(all(feature = "alloc", feature = "serde"))]
 mod serde_support {
     use super::{ImperfectHasher, Set, SetInner};
     use displaydoc::Display;

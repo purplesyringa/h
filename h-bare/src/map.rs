@@ -8,9 +8,10 @@ use super::{
 use core::borrow::Borrow;
 
 /// A perfect hash map.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
 #[cfg_attr(
-    feature = "serde",
+    all(feature = "alloc", feature = "serde"),
     serde(
         bound(
             deserialize = "K: serde::Deserialize<'de>, V: serde::Deserialize<'de>, H: serde::Deserialize<'de> + ImperfectHasher<K>"
@@ -19,7 +20,7 @@ use core::borrow::Borrow;
     )
 )]
 #[cfg_attr(
-    feature = "serde",
+    all(feature = "alloc", feature = "serde"),
     expect(
         clippy::unsafe_derive_deserialize,
         reason = "safety requirements are validated using TryFrom"
@@ -34,7 +35,8 @@ pub struct Map<K, V, H = GenericHasher> {
 ///
 /// This needs to be a separate type so that `serde` can convert from this type to [`Map`] with
 /// [`TryFrom`] during deserialization, so that we can validate the map.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
 struct MapInner<K, V, H> {
     /// A PHF mapping keys to indices in [`data`](Self::data).
     phf: Phf<K, H>,
@@ -224,7 +226,7 @@ impl<K, V, H> Map<K, V, H> {
 }
 
 /// Scope for `serde`-related code.
-#[cfg(feature = "serde")]
+#[cfg(all(feature = "alloc", feature = "serde"))]
 mod serde_support {
     use super::{ImperfectHasher, Map, MapInner};
     use displaydoc::Display;

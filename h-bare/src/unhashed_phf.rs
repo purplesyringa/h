@@ -2,10 +2,12 @@
 
 #![expect(clippy::arithmetic_side_effects, reason = "many false positives")]
 
-use super::{bitmap::BitMap, const_vec::ConstVec};
-
+use super::const_vec::ConstVec;
 #[cfg(feature = "build")]
-use alloc::{vec, vec::Vec};
+use {
+    super::bitmap::BitMap,
+    alloc::{vec, vec::Vec},
+};
 
 /// We assume that usize is at most 64-bit in many places.
 const _: () = assert!(
@@ -24,8 +26,12 @@ const _: () = assert!(
         reason = "safety requirements are validated using TryFrom"
     )
 )]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(try_from = "UnhashedPhfInner"))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
+#[cfg_attr(
+    all(feature = "alloc", feature = "serde"),
+    serde(try_from = "UnhashedPhfInner")
+)]
 pub struct UnhashedPhf {
     /// The actual PHF.
     inner: UnhashedPhfInner,
@@ -36,7 +42,8 @@ pub struct UnhashedPhf {
 /// This needs to be a separate type so that `serde` can convert from this type to [`UnhashedPhf`]
 /// with [`TryFrom`] during deserialization, so that we can validate the PHF.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
 struct UnhashedPhfInner {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     hash_space: usize,
@@ -136,7 +143,7 @@ impl UnhashedPhf {
 }
 
 /// Scope for `serde`-related code.
-#[cfg(feature = "serde")]
+#[cfg(all(feature = "alloc", feature = "serde"))]
 mod serde_support {
     use super::{UnhashedPhf, UnhashedPhfInner};
     use displaydoc::Display;
@@ -476,7 +483,7 @@ impl Mixer {
     /// Given the range of Approx values (`[0; hash_space)`) and the table of displacements,
     /// computes the limit `hash_space_with_oob` such that for any key, including a key not from the
     /// training set, the computed `hash` is below the limit.
-    #[cfg(feature = "build")]
+    #[cfg(any(feature = "build", all(feature = "alloc", feature = "serde")))]
     fn get_hash_space_with_oob(self, hash_space: usize, displacements: &[u16]) -> usize {
         let max_displacement = *displacements.iter().max().unwrap_or(&0) as usize;
         match self {
