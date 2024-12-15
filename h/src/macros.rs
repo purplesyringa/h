@@ -52,78 +52,86 @@ pub use h_macros;
 // 1. Document the accepted syntax.
 // 2. Pass `$crate` to the macro.
 
-/// Create a [`Map`] in compile time.
-///
-/// See [module-level documentation](self) for more information.
-///
-///
-/// # Example
-///
-/// [`map!`] usually returns a reference to a map. Most maps should be put in a `const`:
-///
-/// ```rust
-/// const MAP: &h::Map<&str, i32> = h::map! {
-///     "hello" => 1,
-///     "world" => 2,
-/// };
-///
-/// assert_eq!(MAP.get("hello"), Some(&1));
-/// assert_eq!(MAP.get("world"), Some(&2));
-/// assert_eq!(MAP.get("other"), None);
-/// ```
-///
-///
-/// # Mutability
-///
-/// Sometimes you have values that need to be initialized or even mutated in runtime. In this case,
-/// add `mut;` to the beginning of the macro arguments. This enables the macro to return [`Map`]
-/// instead of `&Map`.
-///
-/// You can now put the map in a `let`/`let mut` binding or initialize it in a `const` with
-/// [`LazyLock`](std::sync::LazyLock):
-///
-/// ```rust
-/// use std::sync::Mutex;
-///
-/// let map = h::map! {
-///     mut;
-///     "hello" => Mutex::new(1),
-///     "world" => Mutex::new(2),
-/// };
-///
-/// let mutex = map.get("hello").unwrap();
-/// let guard = mutex.lock().unwrap();
-/// assert_eq!(*guard, 1);
-/// ```
-///
-/// ```rust
-/// let mut map = h::map! {
-///     mut;
-///     "hello" => 1,
-///     "world" => 2,
-/// };
-///
-/// assert_eq!(map.get_mut("hello"), Some(&mut 1));
-/// ```
-///
-/// `mut;` does not work in a `const` context.
-///
-/// If you accidentally omit `mut;`, you might see errors like:
-///
-/// > temporary value dropped while borrowed
-///
-/// or:
-///
-/// > cannot borrow `*map` as mutable, as it is behind a `&` reference
-///
-///
-/// # Nesting
-///
-/// Mutable maps can be nested, constant ones can't. It is almost always more efficient to use
-/// a tuple as a key instead.
+macro_rules! macro_rules_map {
+    ($($rules:tt)*) => {
+        /// Create a [`Map`] in compile time.
+        ///
+        /// See [module-level documentation](self) for more information.
+        ///
+        ///
+        /// # Example
+        ///
+        /// [`map!`] usually returns a reference to a map. Most maps should be put in a `const`:
+        ///
+        /// ```rust
+        /// const MAP: &h::Map<&str, i32> = h::map! {
+        ///     "hello" => 1,
+        ///     "world" => 2,
+        /// };
+        ///
+        /// assert_eq!(MAP.get("hello"), Some(&1));
+        /// assert_eq!(MAP.get("world"), Some(&2));
+        /// assert_eq!(MAP.get("other"), None);
+        /// ```
+        ///
+        ///
+        /// # Mutability
+        ///
+        /// Sometimes you have values that need to be initialized or even mutated in runtime. In
+        /// this case, add `mut;` to the beginning of the macro arguments. This enables the macro to
+        /// return [`Map`] instead of `&Map`.
+        ///
+        /// You can now put the map in a `let`/`let mut` binding or initialize it in a `const` with
+        /// [`LazyLock`](std::sync::LazyLock):
+        ///
+        /// ```rust
+        /// use std::sync::Mutex;
+        ///
+        /// let map = h::map! {
+        ///     mut;
+        ///     "hello" => Mutex::new(1),
+        ///     "world" => Mutex::new(2),
+        /// };
+        ///
+        /// let mutex = map.get("hello").unwrap();
+        /// let guard = mutex.lock().unwrap();
+        /// assert_eq!(*guard, 1);
+        /// ```
+        ///
+        /// ```rust
+        /// let mut map = h::map! {
+        ///     mut;
+        ///     "hello" => 1,
+        ///     "world" => 2,
+        /// };
+        ///
+        /// assert_eq!(map.get_mut("hello"), Some(&mut 1));
+        /// ```
+        ///
+        /// `mut;` does not work in a `const` context.
+        ///
+        /// If you accidentally omit `mut;`, you might see errors like:
+        ///
+        /// > temporary value dropped while borrowed
+        ///
+        /// or:
+        ///
+        /// > cannot borrow `*map` as mutable, as it is behind a `&` reference
+        ///
+        ///
+        /// # Nesting
+        ///
+        /// Mutable maps can be nested, constant ones can't. It is almost always more efficient to
+        /// use a tuple as a key instead.
+        #[macro_export]
+        macro_rules! map {
+            $($rules)*
+        }
+    };
+}
+
 #[cfg(doc)]
-#[macro_export]
-macro_rules! map {
+macro_rules_map! {
     // Not actually valid/usable macro rules, but close enough for docs.
     (
         $(for $key_type:ty;)?
@@ -135,25 +143,40 @@ macro_rules! map {
     };
 }
 
-/// Create a [`Set`] in compile time.
-///
-/// See [module-level documentation](self) for more information.
-///
-///
-/// # Example
-///
-/// [`set!`] returns a reference to a set. Sets should be put in a `const`:
-///
-/// ```rust
-/// const SET: &h::Set<&str> = h::set!("hello", "world");
-///
-/// assert!(SET.contains("hello"));
-/// assert!(SET.contains("world"));
-/// assert!(!SET.contains("other"));
-/// ```
+#[cfg(not(doc))]
+macro_rules_map! {
+    ($($tt:tt)*) => {
+        $crate::macros::h_macros::map!(crate $crate; $($tt)*)
+    };
+}
+
+macro_rules! macro_rules_set {
+    ($($rules:tt)*) => {
+        /// Create a [`Set`] in compile time.
+        ///
+        /// See [module-level documentation](self) for more information.
+        ///
+        ///
+        /// # Example
+        ///
+        /// [`set!`] returns a reference to a set. Sets should be put in a `const`:
+        ///
+        /// ```rust
+        /// const SET: &h::Set<&str> = h::set!("hello", "world");
+        ///
+        /// assert!(SET.contains("hello"));
+        /// assert!(SET.contains("world"));
+        /// assert!(!SET.contains("other"));
+        /// ```
+        #[macro_export]
+        macro_rules! set {
+            $($rules)*
+        }
+    };
+}
+
 #[cfg(doc)]
-#[macro_export]
-macro_rules! set {
+macro_rules_set! {
     // Not actually valid/usable macro rules, but close enough for docs.
     (
         $(for $element_type:ty;)?
@@ -164,23 +187,38 @@ macro_rules! set {
     };
 }
 
-/// Create a [`Phf`] in compile time.
-///
-/// See [module-level documentation](self) for more information.
-///
-///
-/// # Example
-///
-/// [`phf!`] returns a reference to a PHF. PHFs should be put in a `const`:
-///
-/// ```rust
-/// const PHF: &h::Phf<&str> = h::phf!("hello", "world");
-///
-/// assert_ne!(PHF.hash("hello"), PHF.hash("world"));
-/// ```
+#[cfg(not(doc))]
+macro_rules_set! {
+    ($($tt:tt)*) => {
+        $crate::macros::h_macros::set!(crate $crate; $($tt)*)
+    };
+}
+
+macro_rules! macro_rules_phf {
+    ($($rules:tt)*) => {
+        /// Create a [`Phf`] in compile time.
+        ///
+        /// See [module-level documentation](self) for more information.
+        ///
+        ///
+        /// # Example
+        ///
+        /// [`phf!`] returns a reference to a PHF. PHFs should be put in a `const`:
+        ///
+        /// ```rust
+        /// const PHF: &h::Phf<&str> = h::phf!("hello", "world");
+        ///
+        /// assert_ne!(PHF.hash("hello"), PHF.hash("world"));
+        /// ```
+        #[macro_export]
+        macro_rules! phf {
+            $($rules)*
+        }
+    };
+}
+
 #[cfg(doc)]
-#[macro_export]
-macro_rules! phf {
+macro_rules_phf! {
     // Not actually valid/usable macro rules, but close enough for docs.
     (
         $(for $key_type:ty;)?
@@ -192,24 +230,7 @@ macro_rules! phf {
 }
 
 #[cfg(not(doc))]
-#[macro_export]
-macro_rules! map {
-    ($($tt:tt)*) => {
-        $crate::macros::h_macros::map!(crate $crate; $($tt)*)
-    };
-}
-
-#[cfg(not(doc))]
-#[macro_export]
-macro_rules! set {
-    ($($tt:tt)*) => {
-        $crate::macros::h_macros::set!(crate $crate; $($tt)*)
-    };
-}
-
-#[cfg(not(doc))]
-#[macro_export]
-macro_rules! phf {
+macro_rules_phf! {
     ($($tt:tt)*) => {
         $crate::macros::h_macros::phf!(crate $crate; $($tt)*)
     };
@@ -234,7 +255,7 @@ mod tests {
         assert_eq!(MAP.get(&456), Some(&1));
         assert_eq!(MAP.get(&789), None);
 
-        let map = h::map! {
+        let map = map! {
             mut;
             "hello" => Mutex::new(1),
             "world" => Mutex::new(2),
@@ -255,7 +276,7 @@ mod tests {
 
     #[test]
     fn bytes_as_key() {
-        set!(
+        let _set = set!(
             for &[u8];
             &[1, 2, 3], // direct
             b"abc", // implicit coercion
