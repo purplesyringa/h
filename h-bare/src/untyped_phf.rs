@@ -255,30 +255,15 @@ impl Buckets {
         }
 
         // We'll store per-size bucket lists here
-        let mut by_size: Vec<Vec<(usize, usize)>> = Vec::new();
+        let mut by_size = Vec::new();
 
-        // A manual group_by implementation, just two pointers. `product` always stores the product
-        // for the currently processed element.
-        let mut bucket;
-        (keys[0], bucket) = to_approx_bucket(keys[0], hash_space, bucket_shift);
-
-        let mut left = 0;
-        while left < keys.len() {
-            let current_bucket = bucket;
-
-            // Keep going while the key has the same bucket as the previous one
-            let mut right = left + 1;
-            while right < keys.len() && {
-                // Replace the key with its Approx value in-place for future use. We have already
-                // computed the product, so this is cheap.
-                (keys[right], bucket) = to_approx_bucket(keys[right], hash_space, bucket_shift);
-                bucket == current_bucket
-            } {
-                right += 1;
-            }
-
-            let approx_for_bucket = &mut keys[left..right];
-
+        // Iterate over buckets
+        let keys_ptr = keys.as_ptr();
+        for (bucket, approx_for_bucket) in map_chunk_by(&mut keys, |key| {
+            let (approx, bucket) = to_approx_bucket(*key, hash_space, bucket_shift);
+            *key = approx;
+            bucket
+        }) {
             // Ensure that Approx values don't collide inside the bucket
             approx_for_bucket.sort_unstable();
             if approx_for_bucket
@@ -293,8 +278,8 @@ impl Buckets {
             while by_size.len() <= size {
                 by_size.push(Vec::new());
             }
-            by_size[size].push((current_bucket, left));
-            left = right;
+            let left = unsafe { approx_for_bucket.as_ptr().offset_from(keys_ptr) } as usize;
+            by_size[size].push((bucket, left));
         }
 
         Some(Self {
@@ -358,6 +343,36 @@ impl Buckets {
             },
         })
     }
+}
+
+/// `map` and `chunk_by` in one go.
+///
+/// `key` is invoked exactly once for each element of `slice` and may mutate the element. The
+/// returned iterator yields slices of consecutive elements with equal return values of `key`.
+#[cfg(feature = "build")]
+fn map_chunk_by<'a, T, U: PartialEq>(
+    mut slice: &'a mut [T],
+    mut key: impl FnMut(&mut T) -> U + 'a,
+) -> impl Iterator<Item = (U, &'a mut [T])> {
+    let mut next_group_key = slice.first_mut().map(&mut key);
+
+    core::iter::from_fn(move || {
+        if slice.is_empty() {
+            return None;
+        }
+
+        let current_group_key = next_group_key.take().unwrap();
+
+        let mut mid = 1;
+        while mid < slice.len() && current_group_key == *next_group_key.insert(key(&mut slice[mid]))
+        {
+            mid += 1;
+        }
+
+        let (subslice, rest) = core::mem::take(&mut slice).split_at_mut(mid);
+        slice = rest;
+        Some((current_group_key, subslice))
+    })
 }
 
 /// Convert a 64-bit hash to `(Approx, Bucket)`.
