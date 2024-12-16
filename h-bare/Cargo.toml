@@ -10,6 +10,7 @@ categories = ["data-structures", "no-std", "no-std::no-alloc"]
 edition = "2021"
 
 [dependencies]
+const-dispatch = { version = "0.1.0-rc2", optional = true }
 displaydoc = { version = "0.2.5", optional = true, default-features = false }
 proc-macro2 = { version = "1", optional = true, default-features = false }
 quote = { version = "1", optional = true }
@@ -25,7 +26,7 @@ ruzstd = { git = "https://github.com/KillingSpark/zstd-rs", rev = "1d3f062ab57aa
 [features]
 default = ["std"]
 alloc = ["serde?/alloc"]
-build = ["alloc", "dep:radsort"]
+build = ["alloc", "dep:const-dispatch", "dep:radsort"]
 codegen = ["std", "dep:proc-macro2", "dep:quote", "dep:typeid"]
 serde = ["dep:displaydoc", "dep:serde", "dep:thiserror"]
 std = ["alloc", "ruzstd/std"]

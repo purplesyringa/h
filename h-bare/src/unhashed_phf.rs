@@ -7,6 +7,7 @@ use super::const_vec::ConstVec;
 use {
     super::bitmap::BitMap,
     alloc::{vec, vec::Vec},
+    const_dispatch::prelude::*,
 };
 
 /// We assume that usize is at most 64-bit in many places.
@@ -378,6 +379,7 @@ const fn to_approx_bucket(hash: u64, hash_space: usize, bucket_shift: u32) -> (u
     expect(clippy::unsafe_derive_deserialize, reason = "plain old data")
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "build", derive(ConstDispatch))]
 #[non_exhaustive]
 #[doc(hidden)]
 pub enum Mixer {
@@ -412,70 +414,47 @@ impl Mixer {
         approx_for_bucket: &[u64],
         free: &BitMap,
     ) -> Option<u16> {
-        match self {
-            Self::Add => {
-                // SAFETY: Safety requirements forwarded.
-                unsafe { Self::find_valid_displacement_mono::<true>(approx_for_bucket, free) }
-            }
-            Self::Xor => {
-                // SAFETY: Safety requirements forwarded.
-                unsafe { Self::find_valid_displacement_mono::<false>(approx_for_bucket, free) }
-            }
-        }
-    }
+        const_dispatch!(self, |const MIXER: Mixer| {
+            let displacement_bases = match MIXER {
+                Self::Add => {
+                    // We don't iterate through a few of the top 65536 displacements to avoid going
+                    // out of bounds, but that's noise
+                    (0..=u16::MAX - 57).step_by(57)
+                }
+                Self::Xor => (0..=u16::MAX).step_by(8),
+            };
 
-    /// Find a valid displacement.
-    ///
-    /// This is a monomorphised version of
-    /// [`find_valid_displacement`](Self::find_valid_displacement).
-    ///
-    /// # Safety
-    ///
-    /// See docs for [`find_valid_displacement`](Self::find_valid_displacement).
-    #[cfg(feature = "build")]
-    unsafe fn find_valid_displacement_mono<const IS_ADD: bool>(
-        approx_for_bucket: &[u64],
-        free: &BitMap,
-    ) -> Option<u16> {
-        let this = if IS_ADD { Self::Add } else { Self::Xor };
+            for displacement_base in displacement_bases {
+                let mut global_free_mask = u64::MAX;
 
-        let displacement_bases = match this {
-            Self::Add => {
-                // We don't iterate through a few of the top 65536 displacements to avoid going out
-                // of bounds, but that's noise
-                (0..=u16::MAX - 57).step_by(57)
-            }
-            Self::Xor => (0..=u16::MAX).step_by(8),
-        };
+                // Iterate over keys
+                for approx in approx_for_bucket {
+                    let start = MIXER.mix(*approx, displacement_base);
+                    let p = free.as_byte_ptr().wrapping_add(start / 8);
 
-        for displacement_base in displacement_bases {
-            let mut global_free_mask = u64::MAX;
+                    // `local_free_mask[i]` indicates whether `mix(approx, displacement_base + i)`
+                    // is free. The bottom 57/8 bits need to be exact; the top bits may contain
+                    // false negatives.
+                    let local_free_mask = match MIXER {
+                        Self::Add => (unsafe { p.cast::<u64>().read_unaligned() }) >> (start % 8),
+                        Self::Xor => {
+                            BIT_INDEX_XOR_LUT[start % 8][unsafe { p.read() } as usize].into()
+                        }
+                    };
 
-            // Iterate over keys
-            for approx in approx_for_bucket {
-                let start = this.mix(*approx, displacement_base);
-                let p = free.as_byte_ptr().wrapping_add(start / 8);
+                    global_free_mask &= local_free_mask;
+                }
 
-                // `local_free_mask[i]` indicates whether `mix(approx, displacement_base + i)` is
-                // free. The bottom 57/8 bits need to be exact; the top bits may contain false
-                // negatives.
-                let local_free_mask = match this {
-                    Self::Add => (unsafe { p.cast::<u64>().read_unaligned() }) >> (start % 8),
-                    Self::Xor => BIT_INDEX_XOR_LUT[start % 8][unsafe { p.read() } as usize].into(),
-                };
-
-                global_free_mask &= local_free_mask;
+                // If `approx_for_bucket` is empty, this immediately returns `Some(0)`.
+                if global_free_mask != 0 {
+                    #[expect(clippy::cast_possible_truncation, reason = "false positive")]
+                    let displacement_offset = global_free_mask.trailing_zeros() as u16;
+                    return Some(displacement_base + displacement_offset);
+                }
             }
 
-            // If `approx_for_bucket` is empty, this immediately returns `Some(0)`.
-            if global_free_mask != 0 {
-                #[expect(clippy::cast_possible_truncation, reason = "false positive")]
-                let displacement_offset = global_free_mask.trailing_zeros() as u16;
-                return Some(displacement_base + displacement_offset);
-            }
-        }
-
-        None
+            None
+        })
     }
 
     /// Compute the range of indices that can be accessed by absent keys.
