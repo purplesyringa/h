@@ -58,8 +58,8 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         let coeff = keys.len().div_ceil(1_000_000).min(5);
         let mut hash_space = keys.len() + coeff * percent;
 
-        // Increase hash_space exponentially by 1.01 on each iteration until reaching a power of two
-        // size. For good hashes, this loop should terminate soon.
+        // Increase hash_space by 0.5% on each iteration until reaching a power of size. For good
+        // hashes, this loop should terminate soon.
         for hash in H::iter() {
             if let Some(untyped_phf) = UntypedPhf::try_from_keys(
                 keys.clone().map(|key| hash.hash(key.borrow())).collect(),
@@ -73,7 +73,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
             }
             // Both increase the hash space and change the hash function. This is especially
             // important for infinite families, which wouldn't progress otherwise.
-            hash_space = (hash_space + hash_space.div_ceil(100)).min(max_hash_space);
+            hash_space = (hash_space + hash_space.div_ceil(200)).min(max_hash_space);
         }
 
         None
