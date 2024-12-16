@@ -1,6 +1,8 @@
 use super::Map;
-use alloc::string::String;
-use alloc::{vec, vec::Vec};
+use alloc::{
+    string::String,
+    {vec, vec::Vec},
+};
 use ruzstd::{io::Read, StreamingDecoder};
 
 #[test]
@@ -16,8 +18,7 @@ fn build_10m_integers() {
     // This particular seed does not have collisions in the first 10M elements, so no need to sort
     // and deduplicate, which takes time.
     let mut rng = rapidhash::RapidRng::new(0x439f26744da767e5);
-    let entries: alloc::vec::Vec<(u64, usize)> =
-        (0..10000000).map(|i: usize| (rng.next(), i)).collect();
+    let entries: Vec<(u64, usize)> = (0..10000000).map(|i| (rng.next(), i)).collect();
 
     let phf: Map<u64, usize> = Map::from_entries(entries.clone());
     for (k, v) in &entries {
