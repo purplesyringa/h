@@ -264,11 +264,12 @@ impl Buckets {
             *key = approx;
             bucket
         }) {
-            // Ensure that Approx values don't collide inside the bucket
-            approx_for_bucket.sort_unstable();
+            // Ensure that Approx values don't collide inside the bucket. The bucket size is
+            // expected to be very small, so quadratic approach is faster than sorting.
             if approx_for_bucket
-                .windows(2)
-                .any(|window| window[0] == window[1])
+                .iter()
+                .enumerate()
+                .any(|(i, a)| approx_for_bucket[..i].contains(a))
             {
                 return None;
             }
