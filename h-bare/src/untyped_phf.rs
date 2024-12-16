@@ -236,7 +236,7 @@ impl Buckets {
         let bucket_shift = 64 - bucket_count.ilog2();
 
         // Sort keys by bucket using a cache-friendly algorithm
-        let key_to_bucket = |key: u64| key.wrapping_mul(hash_space as u64) >> bucket_shift;
+        let key_to_bucket = |key| to_approx_bucket(key, hash_space, bucket_shift).1;
         // Reduce the number of iterations
         if bucket_count <= 1 << 16i32 {
             #[expect(
