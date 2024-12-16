@@ -31,21 +31,21 @@ const _: () = assert!(
 #[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
 #[cfg_attr(
     all(feature = "alloc", feature = "serde"),
-    serde(try_from = "UnhashedPhfInner")
+    serde(try_from = "UntypedPhfInner")
 )]
-pub struct UnhashedPhf {
+pub struct UntypedPhf {
     /// The actual PHF.
-    inner: UnhashedPhfInner,
+    inner: UntypedPhfInner,
 }
 
 /// The actual PHF.
 ///
-/// This needs to be a separate type so that `serde` can convert from this type to [`UnhashedPhf`]
+/// This needs to be a separate type so that `serde` can convert from this type to [`UntypedPhf`]
 /// with [`TryFrom`] during deserialization, so that we can validate the PHF.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
-struct UnhashedPhfInner {
+struct UntypedPhfInner {
     /// Size of the hash table, without taking out-of-bounds displacements into account
     hash_space: usize,
 
@@ -62,7 +62,7 @@ struct UnhashedPhfInner {
     mixer: Mixer,
 }
 
-impl UnhashedPhf {
+impl UntypedPhf {
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -74,7 +74,7 @@ impl UnhashedPhf {
         mixer: Mixer,
     ) -> Self {
         Self {
-            inner: UnhashedPhfInner {
+            inner: UntypedPhfInner {
                 hash_space,
                 hash_space_with_oob,
                 bucket_shift,
@@ -100,7 +100,7 @@ impl UnhashedPhf {
     pub fn try_from_keys(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
         if keys.is_empty() {
             return Some(Self {
-                inner: UnhashedPhfInner {
+                inner: UntypedPhfInner {
                     hash_space: 0,
                     hash_space_with_oob: 1,
                     bucket_shift: 63,
@@ -146,7 +146,7 @@ impl UnhashedPhf {
 /// Scope for `serde`-related code.
 #[cfg(all(feature = "alloc", feature = "serde"))]
 mod serde_support {
-    use super::{UnhashedPhf, UnhashedPhfInner};
+    use super::{UntypedPhf, UntypedPhfInner};
     use displaydoc::Display;
     use thiserror::Error;
 
@@ -163,11 +163,11 @@ mod serde_support {
         WrongCapacity,
     }
 
-    impl TryFrom<UnhashedPhfInner> for UnhashedPhf {
+    impl TryFrom<UntypedPhfInner> for UntypedPhf {
         type Error = Error;
 
         #[inline]
-        fn try_from(inner: UnhashedPhfInner) -> Result<Self, Error> {
+        fn try_from(inner: UntypedPhfInner) -> Result<Self, Error> {
             if inner.bucket_shift >= 64 {
                 return Err(Error::TooLargeBucketShift);
             }
@@ -324,7 +324,7 @@ impl Buckets {
     /// Attempt to generate a PHF with the given mixer. May fail.
     ///
     /// Hash space must be at least somewhat larger than the number of keys.
-    fn try_generate_phf(&self, mixer: Mixer) -> Option<UnhashedPhf> {
+    fn try_generate_phf(&self, mixer: Mixer) -> Option<UntypedPhf> {
         // Reserve space for elements, plus 2^16 - 1 for out-of-bounds displacements
         let mut free = BitMap::new_ones(self.hash_space + u16::MAX as usize);
 
@@ -348,8 +348,8 @@ impl Buckets {
 
         let hash_space_with_oob = mixer.get_hash_space_with_oob(self.hash_space, &displacements);
 
-        Some(UnhashedPhf {
-            inner: UnhashedPhfInner {
+        Some(UntypedPhf {
+            inner: UntypedPhfInner {
                 hash_space: self.hash_space,
                 hash_space_with_oob,
                 bucket_shift: self.bucket_shift,
@@ -507,17 +507,17 @@ const BIT_INDEX_XOR_LUT: [[u8; 256]; 8] = {
 };
 
 #[cfg(feature = "codegen")]
-impl super::codegen::Codegen for UnhashedPhf {
+impl super::codegen::Codegen for UntypedPhf {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
-        let unhashed_phf = gen.path("h::low_level::UnhashedPhf");
+        let untyped_phf = gen.path("h::low_level::UntypedPhf");
         let hash_space = gen.piece(&self.inner.hash_space);
         let hash_space_with_oob = gen.piece(&self.inner.hash_space_with_oob);
         let bucket_shift = gen.piece(&self.inner.bucket_shift);
         let displacements = gen.piece(&self.inner.displacements);
         let mixer = gen.piece(&self.inner.mixer);
         quote::quote!(
-            #unhashed_phf::__from_raw_parts(
+            #untyped_phf::__from_raw_parts(
                 #hash_space,
                 #hash_space_with_oob,
                 #bucket_shift,

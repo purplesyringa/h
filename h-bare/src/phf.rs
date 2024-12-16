@@ -2,7 +2,7 @@
 
 use super::{
     hash::{GenericHasher, ImperfectHasher},
-    unhashed_phf::UnhashedPhf,
+    untyped_phf::UntypedPhf,
 };
 use core::borrow::Borrow;
 use core::marker::PhantomData;
@@ -18,7 +18,7 @@ pub struct Phf<T, H = GenericHasher> {
     hash: H,
 
     /// The underlying untyped PHF.
-    unhashed_phf: UnhashedPhf,
+    untyped_phf: UntypedPhf,
 
     /// Mark [`Phf`] as contravariant in `T`.
     _marker: PhantomData<fn(T)>,
@@ -61,13 +61,13 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         // Increase hash_space exponentially by 1.01 on each iteration until reaching a power of two
         // size. For good hashes, this loop should terminate soon.
         for hash in H::iter() {
-            if let Some(unhashed_phf) = UnhashedPhf::try_from_keys(
+            if let Some(untyped_phf) = UntypedPhf::try_from_keys(
                 keys.clone().map(|key| hash.hash(key.borrow())).collect(),
                 hash_space,
             ) {
                 return Some(Self {
                     hash,
-                    unhashed_phf,
+                    untyped_phf,
                     _marker: PhantomData,
                 });
             }
@@ -98,10 +98,10 @@ impl<T, H> Phf<T, H> {
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn __from_raw_parts(hash: H, unhashed_phf: UnhashedPhf) -> Self {
+    pub const fn __from_raw_parts(hash: H, untyped_phf: UntypedPhf) -> Self {
         Self {
             hash,
-            unhashed_phf,
+            untyped_phf,
             _marker: PhantomData,
         }
     }
@@ -118,7 +118,7 @@ impl<T, H> Phf<T, H> {
         T: Borrow<U>,
         H: ImperfectHasher<U>,
     {
-        self.unhashed_phf.hash(self.hash.hash(key))
+        self.untyped_phf.hash(self.hash.hash(key))
     }
 
     /// Get the boundary on indices.
@@ -129,7 +129,7 @@ impl<T, H> Phf<T, H> {
     /// keys outside the training dataset.
     #[inline]
     pub const fn capacity(&self) -> usize {
-        self.unhashed_phf.capacity()
+        self.untyped_phf.capacity()
     }
 }
 
@@ -139,7 +139,7 @@ impl<T, H: super::codegen::Codegen> super::codegen::Codegen for Phf<T, H> {
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let phf = gen.path("h::Phf");
         let hash = gen.piece(&self.hash);
-        let unhashed_phf = gen.piece(&self.unhashed_phf);
-        quote::quote!(#phf::__from_raw_parts(#hash, #unhashed_phf))
+        let untyped_phf = gen.piece(&self.untyped_phf);
+        quote::quote!(#phf::__from_raw_parts(#hash, #untyped_phf))
     }
 }
