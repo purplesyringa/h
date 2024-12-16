@@ -147,7 +147,7 @@ mod serde_support {
     impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for ConstVec<T> {
         #[inline]
         fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            alloc::vec::Vec::<T>::deserialize(deserializer).map(Into::into)
+            alloc::vec::Vec::<T>::deserialize(deserializer).map(ConstVec::from_vec)
         }
     }
 }
