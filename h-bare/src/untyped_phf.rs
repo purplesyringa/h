@@ -195,7 +195,7 @@ struct Buckets {
     /// Approx values of keys, ordered such that all buckets are consecutive
     approxs: Vec<u64>,
 
-    /// Buckets, grouped by size. The tuple is `(Bucket, size)`.
+    /// Buckets, grouped by size. The tuple is `(Bucket, left)`.
     by_size: Vec<Vec<(usize, usize)>>,
 
     /// The `hash_space` parameter this object is valid under

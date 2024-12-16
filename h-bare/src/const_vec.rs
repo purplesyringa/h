@@ -57,6 +57,7 @@ impl<T> ConstVec<T> {
     /// To prevent this unsoundness, we require that `T: Sync`. `T: Send => T: Sync` would also
     /// work, but Rust cannot express this constraint.
     #[inline]
+    #[must_use]
     pub const fn from_static_ref(arr: &'static [T]) -> Self
     where
         T: Sync,
@@ -67,6 +68,7 @@ impl<T> ConstVec<T> {
     /// Initialize the vector from runtime data.
     #[cfg(feature = "alloc")]
     #[inline]
+    #[must_use]
     pub const fn from_vec(vec: alloc::vec::Vec<T>) -> Self {
         Self::RunTime(vec)
     }
