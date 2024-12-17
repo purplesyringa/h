@@ -79,7 +79,7 @@ pub fn group_by_key<T: Copy, E>(
     const BITS: u32 = 8;
 
     let n_buckets = 1 << key_bitness.min(BITS);
-    let reserved_capacity = elements_len / n_buckets;
+    let reserved_capacity = (elements_len / n_buckets).max(1); // 0 breaks `chunks_mut`
 
     // Partitioning a single allocation is more efficient than allocating multiple times
     let mut buffer = vec![MaybeUninit::uninit(); elements_len];
