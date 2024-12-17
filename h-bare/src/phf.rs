@@ -58,7 +58,8 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         let coeff = keys.len().div_ceil(1_000_000).min(5);
         let mut hash_space = keys.len() + coeff * percent;
 
-        // Increase hash_space by 0.5% on each iteration until reaching a power of size. For good
+        // Increase hash_space exponentially by 0.5% on each iteration until reaching a power of two
+        // size. This protects against displacements getting out of range on large input. For good
         // hashes, this loop should terminate soon.
         for hash in H::iter() {
             if let Some(untyped_phf) = UntypedPhf::try_from_keys(
