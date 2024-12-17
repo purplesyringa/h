@@ -5,7 +5,7 @@
 use super::const_vec::ConstVec;
 #[cfg(feature = "build")]
 use {
-    super::bitmap::BitMap,
+    super::{algorithms::group_by_key, bitmap::BitMap},
     alloc::{vec, vec::Vec},
     const_dispatch::prelude::*,
 };
@@ -97,8 +97,11 @@ impl UntypedPhf {
         reason = "very heavy, we'd rather not copy it to every crate"
     )]
     #[must_use]
-    pub fn try_from_keys(keys: Vec<u64>, hash_space: usize) -> Option<Self> {
-        if keys.is_empty() {
+    pub fn try_from_keys(
+        keys: impl ExactSizeIterator<Item = u64>,
+        hash_space: usize,
+    ) -> Option<Self> {
+        if keys.len() == 0 {
             return Some(Self {
                 inner: UntypedPhfInner {
                     hash_space: 0,
@@ -223,8 +226,8 @@ impl Buckets {
     ///
     /// Panics if `keys` is empty, if `hash_space < keys.len()`, or if `hash_space` is close to
     /// `usize::MAX`.
-    fn try_from_keys(mut keys: Vec<u64>, hash_space: usize) -> Option<Self> {
-        assert!(!keys.is_empty(), "Cannot create buckets from empty keys");
+    fn try_from_keys(keys: impl ExactSizeIterator<Item = u64>, hash_space: usize) -> Option<Self> {
+        assert!(keys.len() > 0, "Cannot create buckets from empty keys");
         assert!(hash_space >= keys.len(), "Hash space too small");
         assert!(
             hash_space.checked_add(u16::MAX as usize).is_some(),
@@ -235,56 +238,49 @@ impl Buckets {
         let bucket_count = keys.len().div_ceil(Self::LAMBDA).next_power_of_two().max(2);
         let bucket_shift = 64 - bucket_count.ilog2();
 
-        // Sort keys by bucket using a cache-friendly algorithm
-        let key_to_bucket = |key| to_approx_bucket(key, hash_space, bucket_shift).1;
-        // Reduce the number of iterations
-        if bucket_count <= 1 << 16i32 {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "bucket < bucket_size <= 2^16"
-            )]
-            radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u16);
-        } else if bucket_count <= 1 << 32i32 {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "bucket < bucket_size <= 2^32"
-            )]
-            radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key) as u32);
-        } else {
-            radsort::sort_by_key(&mut keys, |key| key_to_bucket(*key));
-        }
-
-        // We'll store per-size bucket lists here
-        let mut by_size = Vec::new();
-
         // Iterate over buckets
-        let keys_ptr = keys.as_ptr();
-        for (bucket, approx_for_bucket) in map_chunk_by(&mut keys, |key| {
-            let (approx, bucket) = to_approx_bucket(*key, hash_space, bucket_shift);
-            *key = approx;
-            bucket
-        }) {
-            // Ensure that Approx values don't collide inside the bucket. The bucket size is
-            // expected to be very small, so quadratic approach is faster than sorting.
-            if approx_for_bucket
-                .iter()
-                .enumerate()
-                .any(|(i, a)| approx_for_bucket[..i].contains(a))
-            {
-                return None;
-            }
+        let keys_len = keys.len();
+        let mut approxs = Vec::with_capacity(keys.len());
+        let mut by_size = Vec::new();
+        group_by_key(
+            keys,
+            keys_len,
+            bucket_count.ilog2(),
+            bucket_shift,
+            &mut |key| key.wrapping_mul(hash_space as u64),
+            &mut |keys_for_bucket| {
+                let left = approxs.len();
+                let mut bucket = 0;
+                for key in keys_for_bucket {
+                    let approx;
+                    (approx, bucket) = to_approx_bucket(key, hash_space, bucket_shift);
+                    approxs.push(approx);
+                }
+                let approx_for_bucket = &mut approxs[left..];
 
-            // Add bucket to its per-size list
-            let size = approx_for_bucket.len();
-            while by_size.len() <= size {
-                by_size.push(Vec::new());
-            }
-            let left = unsafe { approx_for_bucket.as_ptr().offset_from(keys_ptr) } as usize;
-            by_size[size].push((bucket, left));
-        }
+                // Ensure that Approx values don't collide inside the bucket. The bucket size is
+                // expected to be very small, so quadratic approach is faster than sorting.
+                if approx_for_bucket
+                    .iter()
+                    .enumerate()
+                    .any(|(i, a)| approx_for_bucket[..i].contains(a))
+                {
+                    return Err(());
+                }
+
+                // Add bucket to its per-size list
+                let size = approx_for_bucket.len();
+                while by_size.len() <= size {
+                    by_size.push(Vec::new());
+                }
+                by_size[size].push((bucket, left));
+                Ok(())
+            },
+        )
+        .ok()?;
 
         Some(Self {
-            approxs: keys,
+            approxs,
             by_size,
             hash_space,
             bucket_count,
@@ -344,36 +340,6 @@ impl Buckets {
             },
         })
     }
-}
-
-/// `map` and `chunk_by` in one go.
-///
-/// `key` is invoked exactly once for each element of `slice` and may mutate the element. The
-/// returned iterator yields slices of consecutive elements with equal return values of `key`.
-#[cfg(feature = "build")]
-fn map_chunk_by<'a, T, U: PartialEq>(
-    mut slice: &'a mut [T],
-    mut key: impl FnMut(&mut T) -> U + 'a,
-) -> impl Iterator<Item = (U, &'a mut [T])> {
-    let mut next_group_key = slice.first_mut().map(&mut key);
-
-    core::iter::from_fn(move || {
-        if slice.is_empty() {
-            return None;
-        }
-
-        let current_group_key = next_group_key.take().unwrap();
-
-        let mut mid = 1;
-        while mid < slice.len() && current_group_key == *next_group_key.insert(key(&mut slice[mid]))
-        {
-            mid += 1;
-        }
-
-        let (subslice, rest) = core::mem::take(&mut slice).split_at_mut(mid);
-        slice = rest;
-        Some((current_group_key, subslice))
-    })
 }
 
 /// Convert a 64-bit hash to `(Approx, Bucket)`.

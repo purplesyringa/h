@@ -63,7 +63,7 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         // hashes, this loop should terminate soon.
         for hash in H::iter() {
             if let Some(untyped_phf) = UntypedPhf::try_from_keys(
-                keys.clone().map(|key| hash.hash(key.borrow())).collect(),
+                keys.clone().map(|key| hash.hash(key.borrow())),
                 hash_space,
             ) {
                 return Some(Self {

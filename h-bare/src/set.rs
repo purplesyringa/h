@@ -66,7 +66,7 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
         let len = elements.len();
         let phf = Phf::try_from_keys(elements.iter())?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
-        super::scatter::scatter(elements, |element| phf.hash(element), &mut data);
+        super::algorithms::scatter(elements, |element| phf.hash(element), &mut data);
         Some(Self {
             inner: SetInner {
                 phf,

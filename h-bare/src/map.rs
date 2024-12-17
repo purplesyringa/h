@@ -66,7 +66,7 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
         let len = entries.len();
         let phf = Phf::try_from_keys(entries.iter().map(|(key, _)| key))?;
         let mut data: alloc::vec::Vec<_> = (0..phf.capacity()).map(|_| None).collect();
-        super::scatter::scatter(entries, |(key, _)| phf.hash(key), &mut data);
+        super::algorithms::scatter(entries, |(key, _)| phf.hash(key), &mut data);
         Some(Self {
             inner: MapInner {
                 phf,

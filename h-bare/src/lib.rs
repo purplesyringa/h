@@ -10,13 +10,13 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+pub(crate) mod algorithms;
 pub(crate) mod bitmap;
 pub mod codegen;
 mod const_vec;
 pub mod hash;
 mod map;
 mod phf;
-pub(crate) mod scatter;
 mod set;
 pub(crate) mod untyped_phf;
 
