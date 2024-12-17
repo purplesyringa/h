@@ -1,8 +1,3 @@
-#![expect(
-    clippy::shadow_unrelated,
-    reason = "https://github.com/rust-lang/rust-clippy/issues/11827"
-)]
-
 use super::{
     types::{IntegerTypeNode, TypeNode, TypePtr},
     values::Value,
