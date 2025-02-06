@@ -207,8 +207,7 @@ impl CodeGenerator {
                 #[expect(
                     clippy::decimal_literal_representation,
                     clippy::allow_attributes_without_reason,
-                    clippy::unreadable_literal,
-                    unused_braces
+                    clippy::unreadable_literal
                 )]
                 {
                     #extern_crate_alloc
