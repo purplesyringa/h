@@ -63,6 +63,9 @@ struct UntypedPhfInner {
 }
 
 impl UntypedPhf {
+    /// Initialize from saved data.
+    ///
+    /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]

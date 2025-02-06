@@ -52,6 +52,7 @@ pub use h_macros;
 // 1. Document the accepted syntax.
 // 2. Pass `$crate` to the macro.
 
+/// Generate a [`map`] macro with docs.
 macro_rules! macro_rules_map {
     ($($rules:tt)*) => {
         /// Create a [`Map`] in compile time.
@@ -157,6 +158,7 @@ macro_rules_map! {
     };
 }
 
+/// Generate a [`set`] macro with docs.
 macro_rules! macro_rules_set {
     ($($rules:tt)*) => {
         /// Create a [`Set`] in compile time.
@@ -201,6 +203,7 @@ macro_rules_set! {
     };
 }
 
+/// Generate a [`phf`] macro with docs.
 macro_rules! macro_rules_phf {
     ($($rules:tt)*) => {
         /// Create a [`Phf`] in compile time.

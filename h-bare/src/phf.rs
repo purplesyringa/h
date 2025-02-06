@@ -96,6 +96,9 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
 }
 
 impl<T, H> Phf<T, H> {
+    /// Initialize from saved data.
+    ///
+    /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]

@@ -92,6 +92,9 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
 }
 
 impl<K, V, H> Map<K, V, H> {
+    /// Initialize from saved data.
+    ///
+    /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]

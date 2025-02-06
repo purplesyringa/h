@@ -119,10 +119,9 @@ impl<T: ?Sized + PortableHash> ImperfectHasher<T> for GenericHasher {
 ///   into the hasher is a bad idea because of possible differences in pointer size.
 ///
 /// - When hashing two objects that compare unequal, the sequence of `write_*` calls must be
-///   different between the two objects. In addition, the *first* different `write_*` call must be
-///   an invocation of *the same* method with both of the objects, with different arguments. In
-///   addition, if that method is `write`, the byte string written by one object must not be
-///   a prefix of the byte string written by another object.
+///   different between the two objects. The *first* different `write_*` call must be an invocation
+///   of *the same* method with different arguments. If that method is `write`, the byte string
+///   written by one object must not be a prefix of the byte string written by another object.
 pub trait PortableHash {
     /// Write a value into the hasher.
     fn hash<H: Hasher>(&self, state: &mut H);

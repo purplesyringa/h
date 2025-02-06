@@ -92,6 +92,9 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
 }
 
 impl<T, H> Set<T, H> {
+    /// Initialize from saved data.
+    ///
+    /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]

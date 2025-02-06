@@ -147,8 +147,8 @@ impl CodeGenerator {
 
     /// Configure name-to-path mapping for crates.
     ///
-    /// By default, `h` is mapped to `::h`. Reconfiguring this might be necessary if you want to
-    /// generate code with `h` from a proc-macro.
+    /// By default, `h` is mapped to `::h`, and similarly for other crates. Reconfiguring this might
+    /// be necessary if you want to generate code from a proc-macro.
     #[inline]
     pub fn set_crate(&mut self, name: &str, path: TokenStream) {
         self.crate_paths.insert(name.into(), path);
@@ -293,13 +293,16 @@ impl Default for CodeGenerator {
 ///
 /// When such a problem arises, the best way forward is to declare a public constructor with
 /// a mangled name and with `#[doc(hidden)]`. It's usually best not to declare it as `unsafe` even
-/// if semantically it is, as invoking it would make all generated code nested unedr the call
+/// if semantically it is, as invoking it would make all generated code nested under the call
 /// inherit the permissions of the `unsafe` block.
 pub trait Codegen: Sized {
     /// Emit a piece of code corresponding to this value.
     ///
-    /// This method is only supposed to be called recursively from [`Codegen`] implementations. Call
-    /// [`CodeGenerator::generate`] to produce the complete code output for a single value.
+    /// This is where you're supposed to put logic when implementing [`Codegen`] for custom types.
+    ///
+    /// This method should only be called recursively from [`Codegen`] implementations. In all other
+    /// cases, call [`CodeGenerator::generate`] to produce the complete valid code output for
+    /// a single value.
     fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream;
 }
 

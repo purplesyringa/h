@@ -14,6 +14,7 @@ h-bare = { path = "../h-bare", default-features = false }
 h-macros = { path = "../h-macros", optional = true }
 
 [features]
+# Keep this in sync with features from the `h-bare` crate.
 default = ["std"]
 alloc = ["h-bare/alloc"]
 build = ["alloc", "h-bare/build"]

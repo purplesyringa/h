@@ -24,6 +24,7 @@ typeid = { version = "1.0.2", optional = true }
 ruzstd = { version = "0.8.0", default-features = false }
 
 [features]
+# Keep this in sync with features from the `h` crate.
 default = ["std"]
 alloc = ["serde?/alloc"]
 build = ["alloc", "dep:const-dispatch", "dep:fixed-slice-vec"]

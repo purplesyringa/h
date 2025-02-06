@@ -29,6 +29,9 @@
 //!
 //! # Examples
 //!
+//! As this crate has an unusually short name `h`, we use the full paths, e.g. `h::Map`, instead of
+//! importing the items with `use`.
+//!
 //! Make a static map with macros:
 //!
 //! ```rust
