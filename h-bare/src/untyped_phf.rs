@@ -98,7 +98,7 @@ impl UntypedPhf {
     )]
     #[must_use]
     pub fn try_from_keys(
-        keys: impl ExactSizeIterator<Item = u64>,
+        keys: impl ExactSizeIterator<Item = u64> + Clone,
         hash_space: usize,
     ) -> Option<Self> {
         if keys.len() == 0 {
@@ -226,7 +226,10 @@ impl Buckets {
     ///
     /// Panics if `keys` is empty, if `hash_space < keys.len()`, or if `hash_space` is close to
     /// `usize::MAX`.
-    fn try_from_keys(keys: impl ExactSizeIterator<Item = u64>, hash_space: usize) -> Option<Self> {
+    fn try_from_keys(
+        keys: impl ExactSizeIterator<Item = u64> + Clone,
+        hash_space: usize,
+    ) -> Option<Self> {
         assert!(keys.len() > 0, "Cannot create buckets from empty keys");
         assert!(hash_space >= keys.len(), "Hash space too small");
         assert!(
@@ -245,9 +248,9 @@ impl Buckets {
         group_by_key(
             keys,
             keys_len,
+            &mut |key| key.wrapping_mul(hash_space as u64),
             bucket_count.ilog2(),
             bucket_shift,
-            &mut |key| key.wrapping_mul(hash_space as u64),
             &mut |keys_for_bucket| {
                 let left = approxs.len();
                 let mut bucket = 0;

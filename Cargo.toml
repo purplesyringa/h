@@ -62,6 +62,7 @@ pub_without_shorthand = "warn"
 rc_buffer = "warn"
 rc_mutex = "warn"
 redundant_type_annotations = "warn"
+ref_as_ptr = { level = "allow", priority = 1 }
 rest_pat_in_fully_bound_structs = "warn"
 same_name_method = "warn"
 self_named_module_files = "warn"
