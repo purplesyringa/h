@@ -70,9 +70,12 @@ fn parse_keys<'a>(
     let encoded_keys: Vec<Vec<u8>> = parsed_keys
         .into_iter()
         .map(|key| {
-            let (encoded, value_success) = encode_value(&key, &key_type);
-            failed |= !value_success;
-            encoded
+            if let Ok(encoded) = encode_value(&key, &key_type) {
+                encoded
+            } else {
+                failed = true;
+                Vec::new()
+            }
         })
         .collect();
     if failed {
