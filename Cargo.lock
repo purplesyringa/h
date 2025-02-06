@@ -10,19 +10,20 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "const-dispatch"
-version = "0.1.0-rc2"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fab24df468a2733ed99497181701b2ee798519a68533b02d87d8e2ab60fda7"
+checksum = "d92f006668450764981f652ce1d7191dea64e606ec630eb17f1e41fbc33712ab"
 dependencies = [
  "const-dispatch-proc_macros",
+ "never-say-never",
  "paste",
 ]
 
 [[package]]
 name = "const-dispatch-proc_macros"
-version = "0.1.0-rc2"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abc2b911286f6ba31b94f8996e8ec5d3bfa6c09b42bf16258b920d716bdd6979"
+checksum = "3a3b4d812b9c2a58036e56713a3e7eff5fb8278f2dea180ba03ecb885b3e160b"
 
 [[package]]
 name = "displaydoc"
@@ -131,6 +132,12 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+
+[[package]]
+name = "never-say-never"
+version = "6.6.666"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf5a574dadd7941adeaa71823ecba5e28331b8313fb2e1c6a5c7e5981ea53ad6"
 
 [[package]]
 name = "paste"
