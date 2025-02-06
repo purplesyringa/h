@@ -1,7 +1,7 @@
 #![cfg(feature = "enabled")]
 
 use h::codegen::CodeGenerator;
-use ruzstd::StreamingDecoder;
+use ruzstd::decoding::StreamingDecoder;
 use std::io::Read;
 use std::path::PathBuf;
 

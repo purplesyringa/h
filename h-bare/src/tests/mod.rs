@@ -3,7 +3,7 @@ use alloc::{
     string::String,
     {vec, vec::Vec},
 };
-use ruzstd::{io::Read, StreamingDecoder};
+use ruzstd::{decoding::StreamingDecoder, io::Read};
 
 #[test]
 fn borrow() {

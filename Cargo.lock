@@ -9,12 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
-name = "cfg-if"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
 name = "const-dispatch"
 version = "0.1.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -192,11 +186,9 @@ checksum = "0c19d352e507dbbab7e95a05a98e40bcb2feb5c333c3644cd1ee65acdb819164"
 
 [[package]]
 name = "ruzstd"
-version = "0.7.3"
-source = "git+https://github.com/KillingSpark/zstd-rs?rev=1d3f062ab57aa91344e027bca0430f5136ea0c7c#1d3f062ab57aa91344e027bca0430f5136ea0c7c"
-dependencies = [
- "twox-hash",
-]
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c581601827da5c717bfae77d7b187e54293d23d8fb6b700b4b5e9b5828a13cc3"
 
 [[package]]
 name = "ryu"
@@ -244,12 +236,6 @@ checksum = "87607cb1398ed59d48732e575a4c28a7a8ebf2454b964fe3f224f2afc07909e1"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "syn"
@@ -345,16 +331,6 @@ dependencies = [
  "target-triple",
  "termcolor",
  "toml",
-]
-
-[[package]]
-name = "twox-hash"
-version = "1.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
-dependencies = [
- "cfg-if",
- "static_assertions",
 ]
 
 [[package]]
