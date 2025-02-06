@@ -1,10 +1,6 @@
 //! Perfect hash sets.
 
-use super::{
-    const_vec::ConstVec,
-    hash::{GenericHasher, ImperfectHasher},
-    Phf,
-};
+use super::{const_vec::ConstVec, hash::PortableHash, Phf};
 use core::borrow::Borrow;
 
 /// A perfect hash set.
@@ -13,10 +9,8 @@ use core::borrow::Borrow;
 #[cfg_attr(
     all(feature = "alloc", feature = "serde"),
     serde(
-        bound(
-            deserialize = "T: serde::Deserialize<'de>, H: serde::Deserialize<'de> + ImperfectHasher<T>"
-        ),
-        try_from = "SetInner<T, H>"
+        bound(deserialize = "T: serde::Deserialize<'de> + PortableHash"),
+        try_from = "SetInner<T>"
     )
 )]
 #[cfg_attr(
@@ -26,9 +20,9 @@ use core::borrow::Borrow;
         reason = "safety requirements are validated using TryFrom"
     )
 )]
-pub struct Set<T, H = GenericHasher> {
+pub struct Set<T> {
     /// The actual set.
-    inner: SetInner<T, H>,
+    inner: SetInner<T>,
 }
 
 /// The actual set.
@@ -37,9 +31,9 @@ pub struct Set<T, H = GenericHasher> {
 /// [`TryFrom`] during deserialization, so that we can validate the set.
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
-struct SetInner<T, H> {
+struct SetInner<T> {
     /// A PHF mapping values to indices in [`data`](Self::data).
-    phf: Phf<T, H>,
+    phf: Phf<T>,
 
     /// The elements of the set, indexed by their perfect hashes. `None` means an element with such
     /// a hash is absent.
@@ -53,7 +47,7 @@ struct SetInner<T, H> {
 }
 
 #[cfg(feature = "build")]
-impl<T, H: ImperfectHasher<T>> Set<T, H> {
+impl<T: PortableHash> Set<T> {
     /// Try to generate a perfect hash set.
     ///
     /// There must not be duplicate elements in the input.
@@ -91,14 +85,14 @@ impl<T, H: ImperfectHasher<T>> Set<T, H> {
     }
 }
 
-impl<T, H> Set<T, H> {
+impl<T> Set<T> {
     /// Initialize from saved data.
     ///
     /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn __from_raw_parts(phf: Phf<T, H>, data: ConstVec<Option<T>>, len: usize) -> Self {
+    pub const fn __from_raw_parts(phf: Phf<T>, data: ConstVec<Option<T>>, len: usize) -> Self {
         Self {
             inner: SetInner { phf, data, len },
         }
@@ -109,8 +103,7 @@ impl<T, H> Set<T, H> {
     pub fn get<Q>(&self, value: &Q) -> Option<&T>
     where
         T: Borrow<Q>,
-        Q: ?Sized + Eq,
-        H: ImperfectHasher<Q>,
+        Q: ?Sized + Eq + PortableHash,
     {
         unsafe { self.inner.data.get_unchecked(self.inner.phf.hash(value)) }
             .as_ref()
@@ -122,8 +115,7 @@ impl<T, H> Set<T, H> {
     pub fn contains<Q>(&self, value: &Q) -> bool
     where
         T: Borrow<Q>,
-        Q: ?Sized + Eq,
-        H: ImperfectHasher<Q>,
+        Q: ?Sized + Eq + PortableHash,
     {
         self.get(value).is_some()
     }
@@ -152,7 +144,7 @@ impl<T, H> Set<T, H> {
 /// Scope for `serde`-related code.
 #[cfg(all(feature = "alloc", feature = "serde"))]
 mod serde_support {
-    use super::{ImperfectHasher, Set, SetInner};
+    use super::{PortableHash, Set, SetInner};
     use displaydoc::Display;
     use thiserror::Error;
 
@@ -169,11 +161,11 @@ mod serde_support {
         MisplacedElement,
     }
 
-    impl<T, H: ImperfectHasher<T>> TryFrom<SetInner<T, H>> for Set<T, H> {
+    impl<T: PortableHash> TryFrom<SetInner<T>> for Set<T> {
         type Error = Error;
 
         #[inline]
-        fn try_from(inner: SetInner<T, H>) -> Result<Self, Error> {
+        fn try_from(inner: SetInner<T>) -> Result<Self, Error> {
             if inner.data.len() != inner.phf.capacity() {
                 return Err(Error::WrongDataLength);
             }
@@ -196,7 +188,7 @@ mod serde_support {
 }
 
 #[cfg(feature = "codegen")]
-impl<T: super::codegen::Codegen, H: super::codegen::Codegen> super::codegen::Codegen for Set<T, H> {
+impl<T: super::codegen::Codegen> super::codegen::Codegen for Set<T> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let set = gen.path("h::Set");

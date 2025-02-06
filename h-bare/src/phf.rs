@@ -1,7 +1,7 @@
 //! Perfect hash functions with typed inputs.
 
 use super::{
-    hash::{GenericHasher, ImperfectHasher},
+    hash::{PortableHash, Seed},
     untyped_phf::UntypedPhf,
 };
 use core::borrow::Borrow;
@@ -13,9 +13,9 @@ use core::marker::PhantomData;
 /// might be larger than the size of the training key set.
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
-pub struct Phf<T, H = GenericHasher> {
-    /// The hasher, mapping `T` to a numeric imperfect hash.
-    hash: H,
+pub struct Phf<T> {
+    /// The seed used for mapping `T` to a numeric imperfect hash.
+    seed: Seed,
 
     /// The underlying untyped PHF.
     untyped_phf: UntypedPhf,
@@ -25,7 +25,7 @@ pub struct Phf<T, H = GenericHasher> {
 }
 
 #[cfg(feature = "build")]
-impl<T, H: ImperfectHasher<T>> Phf<T, H> {
+impl<T: PortableHash> Phf<T> {
     /// Try to generate a perfect hash function.
     ///
     /// `keys` must not contain duplicates. It's an exact-size cloneable iterator rather than
@@ -61,13 +61,13 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
         // Increase hash_space exponentially by 0.5% on each iteration until reaching a power of two
         // size. This protects against displacements getting out of range on large input. For good
         // hashes, this loop should terminate soon.
-        for hash in H::iter() {
+        for seed in Seed::iter() {
             if let Some(untyped_phf) = UntypedPhf::try_from_keys(
-                keys.clone().map(|key| hash.hash(key.borrow())),
+                keys.clone().map(|key| key.borrow().hash_one(&seed)),
                 hash_space,
             ) {
                 return Some(Self {
-                    hash,
+                    seed,
                     untyped_phf,
                     _marker: PhantomData,
                 });
@@ -95,16 +95,16 @@ impl<T, H: ImperfectHasher<T>> Phf<T, H> {
     }
 }
 
-impl<T, H> Phf<T, H> {
+impl<T> Phf<T> {
     /// Initialize from saved data.
     ///
     /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn __from_raw_parts(hash: H, untyped_phf: UntypedPhf) -> Self {
+    pub const fn __from_raw_parts(seed: Seed, untyped_phf: UntypedPhf) -> Self {
         Self {
-            hash,
+            seed,
             untyped_phf,
             _marker: PhantomData,
         }
@@ -117,12 +117,11 @@ impl<T, H> Phf<T, H> {
     ///
     /// May return arbitrary indices for keys outside the dataset.
     #[inline]
-    pub fn hash<U: ?Sized>(&self, key: &U) -> usize
+    pub fn hash<U: ?Sized + PortableHash>(&self, key: &U) -> usize
     where
         T: Borrow<U>,
-        H: ImperfectHasher<U>,
     {
-        self.untyped_phf.hash(self.hash.hash(key))
+        self.untyped_phf.hash(key.hash_one(&self.seed))
     }
 
     /// Get the boundary on indices.
@@ -138,12 +137,12 @@ impl<T, H> Phf<T, H> {
 }
 
 #[cfg(feature = "codegen")]
-impl<T, H: super::codegen::Codegen> super::codegen::Codegen for Phf<T, H> {
+impl<T> super::codegen::Codegen for Phf<T> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let phf = gen.path("h::Phf");
-        let hash = gen.piece(&self.hash);
+        let seed = gen.piece(&self.seed);
         let untyped_phf = gen.piece(&self.untyped_phf);
-        quote::quote!(#phf::__from_raw_parts(#hash, #untyped_phf))
+        quote::quote!(#phf::__from_raw_parts(#seed, #untyped_phf))
     }
 }

@@ -1,10 +1,6 @@
 //! Perfect hash maps.
 
-use super::{
-    const_vec::ConstVec,
-    hash::{GenericHasher, ImperfectHasher},
-    Phf,
-};
+use super::{const_vec::ConstVec, hash::PortableHash, Phf};
 use core::borrow::Borrow;
 
 /// A perfect hash map.
@@ -14,9 +10,9 @@ use core::borrow::Borrow;
     all(feature = "alloc", feature = "serde"),
     serde(
         bound(
-            deserialize = "K: serde::Deserialize<'de>, V: serde::Deserialize<'de>, H: serde::Deserialize<'de> + ImperfectHasher<K>"
+            deserialize = "K: serde::Deserialize<'de> + PortableHash, V: serde::Deserialize<'de>"
         ),
-        try_from = "MapInner<K, V, H>"
+        try_from = "MapInner<K, V>"
     )
 )]
 #[cfg_attr(
@@ -26,9 +22,9 @@ use core::borrow::Borrow;
         reason = "safety requirements are validated using TryFrom"
     )
 )]
-pub struct Map<K, V, H = GenericHasher> {
+pub struct Map<K, V> {
     /// The actual map.
-    inner: MapInner<K, V, H>,
+    inner: MapInner<K, V>,
 }
 
 /// The actual map.
@@ -37,9 +33,9 @@ pub struct Map<K, V, H = GenericHasher> {
 /// [`TryFrom`] during deserialization, so that we can validate the map.
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(all(feature = "alloc", feature = "serde"), derive(serde::Deserialize))]
-struct MapInner<K, V, H> {
+struct MapInner<K, V> {
     /// A PHF mapping keys to indices in [`data`](Self::data).
-    phf: Phf<K, H>,
+    phf: Phf<K>,
 
     /// The entries of the map, indexed by their perfect hashes. `None` means an entry whose key has
     /// such a hash is absent.
@@ -53,7 +49,7 @@ struct MapInner<K, V, H> {
 }
 
 #[cfg(feature = "build")]
-impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
+impl<K: PortableHash, V> Map<K, V> {
     /// Try to generate a perfect hash map.
     ///
     /// There must not be duplicate keys in the input.
@@ -91,18 +87,14 @@ impl<K, V, H: ImperfectHasher<K>> Map<K, V, H> {
     }
 }
 
-impl<K, V, H> Map<K, V, H> {
+impl<K, V> Map<K, V> {
     /// Initialize from saved data.
     ///
     /// Meant for codegen, not for public use.
     #[doc(hidden)]
     #[inline]
     #[must_use]
-    pub const fn __from_raw_parts(
-        phf: Phf<K, H>,
-        data: ConstVec<Option<(K, V)>>,
-        len: usize,
-    ) -> Self {
+    pub const fn __from_raw_parts(phf: Phf<K>, data: ConstVec<Option<(K, V)>>, len: usize) -> Self {
         Self {
             inner: MapInner { phf, data, len },
         }
@@ -113,8 +105,7 @@ impl<K, V, H> Map<K, V, H> {
     pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
     where
         K: Borrow<Q>,
-        Q: ?Sized + Eq,
-        H: ImperfectHasher<Q>,
+        Q: ?Sized + Eq + PortableHash,
     {
         unsafe { self.inner.data.get_unchecked(self.inner.phf.hash(key)) }
             .as_ref()
@@ -127,8 +118,7 @@ impl<K, V, H> Map<K, V, H> {
     pub fn get_key_value_mut<Q>(&mut self, key: &Q) -> Option<(&K, &mut V)>
     where
         K: Borrow<Q>,
-        Q: ?Sized + Eq,
-        H: ImperfectHasher<Q>,
+        Q: ?Sized + Eq + PortableHash,
     {
         unsafe { self.inner.data.get_unchecked_mut(self.inner.phf.hash(key)) }
             .as_mut()
@@ -141,8 +131,7 @@ impl<K, V, H> Map<K, V, H> {
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + Eq,
-        H: ImperfectHasher<Q>,
+        Q: ?Sized + Eq + PortableHash,
     {
         self.get_key_value(key).map(|(_, v)| v)
     }
@@ -152,8 +141,7 @@ impl<K, V, H> Map<K, V, H> {
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + Eq,
-        H: ImperfectHasher<Q>,
+        Q: ?Sized + Eq + PortableHash,
     {
         self.get_key_value_mut(key).map(|(_, v)| v)
     }
@@ -163,8 +151,7 @@ impl<K, V, H> Map<K, V, H> {
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: ?Sized + Eq,
-        H: ImperfectHasher<Q>,
+        Q: ?Sized + Eq + PortableHash,
     {
         self.get_key_value(key).is_some()
     }
@@ -231,7 +218,7 @@ impl<K, V, H> Map<K, V, H> {
 /// Scope for `serde`-related code.
 #[cfg(all(feature = "alloc", feature = "serde"))]
 mod serde_support {
-    use super::{ImperfectHasher, Map, MapInner};
+    use super::{Map, MapInner, PortableHash};
     use displaydoc::Display;
     use thiserror::Error;
 
@@ -248,11 +235,11 @@ mod serde_support {
         MisplacedEntry,
     }
 
-    impl<K, V, H: ImperfectHasher<K>> TryFrom<MapInner<K, V, H>> for Map<K, V, H> {
+    impl<K: PortableHash, V> TryFrom<MapInner<K, V>> for Map<K, V> {
         type Error = Error;
 
         #[inline]
-        fn try_from(inner: MapInner<K, V, H>) -> Result<Self, Error> {
+        fn try_from(inner: MapInner<K, V>) -> Result<Self, Error> {
             if inner.data.len() != inner.phf.capacity() {
                 return Err(Error::WrongDataLength);
             }
@@ -275,9 +262,7 @@ mod serde_support {
 }
 
 #[cfg(feature = "codegen")]
-impl<K: super::codegen::Codegen, V: super::codegen::Codegen, H: super::codegen::Codegen>
-    super::codegen::Codegen for Map<K, V, H>
-{
+impl<K: super::codegen::Codegen, V: super::codegen::Codegen> super::codegen::Codegen for Map<K, V> {
     #[inline]
     fn generate_piece(&self, gen: &mut super::codegen::CodeGenerator) -> proc_macro2::TokenStream {
         let map = gen.path("h::Map");
