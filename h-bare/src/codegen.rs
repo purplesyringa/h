@@ -255,7 +255,7 @@ impl CodeGenerator {
             return quote!(#alias);
         }
 
-        if path.split_once("::").unwrap_or((path, "")).0 == "alloc" {
+        if path == "alloc" || path.starts_with("alloc::") {
             self.alloc_wanted = true;
         }
 
