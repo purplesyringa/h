@@ -15,7 +15,7 @@ use self::{
     values::{AsTypedValue, TypedValue, Value},
 };
 use h::{
-    codegen::{CodeGenerator, Codegen},
+    codegen::{Ascribe, CodeGenerator, Codegen, PassThrough},
     hash::PortableHash,
 };
 use proc_macro2::TokenStream;
@@ -112,28 +112,6 @@ fn set_dummy_with_ty(ty: &TokenStream) {
     });
 }
 
-struct PassThrough(TokenStream);
-
-impl Codegen for PassThrough {
-    fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
-        self.0.clone()
-    }
-}
-
-struct Ascribe<T> {
-    value: T,
-    ty: TokenStream,
-}
-
-impl<T: Codegen> Codegen for Ascribe<T> {
-    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
-        let value = gen.piece(&self.value);
-        let identity = gen.path("core::convert::identity");
-        let ty = &self.ty;
-        quote!(#identity::<#ty>(#value))
-    }
-}
-
 fn generate<T: Codegen>(
     context: &Context,
     value: T,
@@ -146,7 +124,7 @@ fn generate<T: Codegen>(
     gen.set_mutability(context.mutability.is_some());
 
     let ty = ty(&mut gen);
-    let value = gen.generate(&Ascribe { value, ty });
+    let value = gen.generate(&Ascribe::new(value, ty));
     if context.mutability.is_some() {
         value
     } else {
@@ -205,7 +183,7 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
                         self.input
                             .elements
                             .iter()
-                            .map(|arm| PassThrough(arm.value.to_token_stream())),
+                            .map(|arm| PassThrough::new(arm.value.to_token_stream())),
                     )
                     .collect(),
                 ),

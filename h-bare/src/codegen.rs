@@ -19,7 +19,7 @@
 //! [coercions](https://doc.rust-lang.org/reference/type-coercions.html). For example, a `&[T]`
 //! slice to `[1, 2, 3]` will be generated as `&[1, 2, 3]`, not `&[1, 2, 3][..]`.
 //!
-//! If necessary, add type annotations manually at the call site.
+//! If necessary, add type annotations manually at the call site or use [`Ascribe`].
 //!
 //!
 //! # Mutability and `const`
@@ -529,3 +529,59 @@ tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11)
 tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17));
 tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17) (S 18));
 tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17) (S 18) (T 19));
+
+/// A wrapper struct for pre-generated code.
+///
+/// Using [`Codegen`] on this struct returns the internally stored [`TokenStream`] without
+/// modifications. This can be used to generate embed from other sources, e.g. macro input.
+pub struct PassThrough(TokenStream);
+
+impl PassThrough {
+    /// Create a [`PassThrough`] wrapper.
+    #[inline]
+    #[must_use]
+    pub const fn new(tokens: TokenStream) -> Self {
+        Self(tokens)
+    }
+}
+
+impl Codegen for PassThrough {
+    #[inline]
+    fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
+        self.0.clone()
+    }
+}
+
+/// A wrapper struct for type ascription.
+///
+/// Generates `core::convert::identity::<T>(value)` with externally supplied code for `T`.
+///
+/// This is rarely necessary, but may be applied on the outmost layer of nested data structures to
+/// disable unwanted coercions when integrated into user-provided code.
+pub struct Ascribe<T> {
+    /// The ascribed value.
+    value: T,
+    /// The token representation of the type `T`.
+    ty: TokenStream,
+}
+
+impl<T> Ascribe<T> {
+    /// Create an [`Ascribe`] wrapper.
+    ///
+    /// `value` is the value to encode, `ty` is the representation of `T`.
+    #[inline]
+    #[must_use]
+    pub const fn new(value: T, ty: TokenStream) -> Self {
+        Self { value, ty }
+    }
+}
+
+impl<T: Codegen> Codegen for Ascribe<T> {
+    #[inline]
+    fn generate_piece(&self, gen: &mut CodeGenerator) -> TokenStream {
+        let value = gen.piece(&self.value);
+        let identity = gen.path("core::convert::identity");
+        let ty = &self.ty;
+        quote!(#identity::<#ty>(#value))
+    }
+}
