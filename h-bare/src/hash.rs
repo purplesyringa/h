@@ -44,7 +44,8 @@ impl Seed {
     /// This is not an infinite PRNG: this method returns always returns a fixed value when called
     /// on a given object.
     #[inline]
-    pub fn get_u64(&self) -> u64 {
+    #[must_use]
+    pub const fn get_u64(&self) -> u64 {
         self.low
     }
 

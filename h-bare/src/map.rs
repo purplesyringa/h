@@ -158,12 +158,14 @@ impl<K, V> Map<K, V> {
 
     /// Get number of entries.
     #[inline]
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.inner.len
     }
 
     /// Check if the hashmap is empty.
     #[inline]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }

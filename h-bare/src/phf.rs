@@ -131,6 +131,7 @@ impl<T> Phf<T> {
     /// The index returned by `hash` is guaranteed to *always* be less than `capacity()`, even for
     /// keys outside the training dataset.
     #[inline]
+    #[must_use]
     pub const fn capacity(&self) -> usize {
         self.untyped_phf.capacity()
     }
