@@ -283,21 +283,101 @@ impl PortableHash for char {
 
 // Floats shouldn't implement `Hash` because they don't implement `Eq`
 
-/// Implement [`PortableHash`] for types that represent UTF-8 strings.
+/// Implement [`PortableHash`] for types that represent strings.
 macro_rules! impl_str {
-    ($ty:ty) => {
+    ($ty:ty, $method:ident) => {
         impl PortableHash for $ty {
             #[inline]
             fn hash<H: Hasher>(&self, state: &mut H) {
                 self.len().hash(state);
-                state.write(self.as_bytes());
+                state.write(self.$method());
             }
         }
     };
 }
-impl_str!(str);
+impl_str!(str, as_bytes);
 #[cfg(feature = "alloc")]
-impl_str!(alloc::string::String);
+impl_str!(alloc::string::String, as_bytes);
+#[cfg(feature = "std")]
+impl_str!(std::ffi::OsStr, as_encoded_bytes);
+#[cfg(feature = "std")]
+impl_str!(std::ffi::OsString, as_encoded_bytes);
+
+/// Implement [`PortableHash`] for types that represent strings without zero bytes.
+macro_rules! impl_cstr {
+    ($ty:ty) => {
+        impl PortableHash for $ty {
+            #[inline]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                state.write(self.to_bytes_with_nul());
+            }
+        }
+    };
+}
+impl_cstr!(core::ffi::CStr);
+#[cfg(feature = "alloc")]
+impl_cstr!(alloc::ffi::CString);
+
+/// Implement [`PortableHash`] for types that represent paths.
+macro_rules! impl_path {
+    ($ty:ty) => {
+        #[cfg(feature = "std")]
+        impl PortableHash for $ty {
+            #[inline]
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                // The built-in `Hash for Path` implementation is borderline ridiculous and is not
+                // prefix-free. Let's keep this simple.
+                for component in self.components() {
+                    component.as_os_str().hash(state);
+                }
+                // Hashing `OsStr` writes the length first. Components cannot be empty, so 0usize is
+                // a valid sentinel.
+                0usize.hash(state);
+            }
+        }
+    };
+}
+impl_path!(std::path::Path);
+impl_path!(std::path::PathBuf);
+
+#[cfg(feature = "alloc")]
+impl<T: ?Sized + PortableHash> PortableHash for alloc::boxed::Box<T> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+
+    #[inline]
+    fn hash_one(&self, seed: &Seed) -> u64 {
+        (**self).hash_one(seed)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: ?Sized + PortableHash> PortableHash for alloc::rc::Rc<T> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+
+    #[inline]
+    fn hash_one(&self, seed: &Seed) -> u64 {
+        (**self).hash_one(seed)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: ?Sized + PortableHash> PortableHash for alloc::sync::Arc<T> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+
+    #[inline]
+    fn hash_one(&self, seed: &Seed) -> u64 {
+        (**self).hash_one(seed)
+    }
+}
 
 #[cfg(feature = "alloc")]
 impl<T: PortableHash> PortableHash for alloc::vec::Vec<T> {
@@ -310,8 +390,129 @@ impl<T: PortableHash> PortableHash for alloc::vec::Vec<T> {
 impl<T: PortableHash> PortableHash for [T] {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.len() as u64);
+        self.len().hash(state);
         T::hash_slice(self, state);
+    }
+}
+
+impl<T: PortableHash, const N: usize> PortableHash for [T; N] {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // `[T; N]` implements `Borrow<[T]>`, so we can't avoid writing `N`.
+        self[..].hash(state);
+    }
+}
+
+impl<T: ?Sized> PortableHash for core::marker::PhantomData<T> {
+    #[inline]
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
+
+    #[inline]
+    fn hash_one(&self, _seed: &Seed) -> u64 {
+        0
+    }
+}
+
+impl PortableHash for () {
+    #[inline]
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
+
+    #[inline]
+    fn hash_one(&self, _seed: &Seed) -> u64 {
+        0
+    }
+}
+
+impl<A: PortableHash> PortableHash for (A,) {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+
+    #[inline]
+    fn hash_one(&self, seed: &Seed) -> u64 {
+        self.0.hash_one(seed)
+    }
+}
+
+/// Implement [`PortableHash`] for tuples of size 2 or greater.
+macro_rules! impl_tuple {
+    ($(($name:tt $index:tt))*) => {
+        impl<$($name: PortableHash),*> PortableHash for ($($name,)*) {
+            #[inline]
+            fn hash<_H: Hasher>(&self, state: &mut _H) {
+                $(self.$index.hash(state);)*
+            }
+        }
+    }
+}
+
+impl_tuple!((A 0) (B 1));
+impl_tuple!((A 0) (B 1) (C 2));
+impl_tuple!((A 0) (B 1) (C 2) (D 3));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17) (S 18));
+impl_tuple!((A 0) (B 1) (C 2) (D 3) (E 4) (F 5) (G 6) (H 7) (I 8) (J 9) (K 10) (L 11) (M 12) (N 13) (O 14) (P 15) (Q 16) (R 17) (S 18) (T 19));
+
+/// Implement [`PortableHash`] for `NonZero` types.
+macro_rules! impl_non_zero {
+    ($($ty:ty),*) => {
+        $(
+            impl PortableHash for core::num::NonZero<$ty> {
+                #[inline]
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    self.get().hash(state);
+                }
+
+                #[inline]
+                fn hash_one(&self, seed: &Seed) -> u64 {
+                    self.get().hash_one(seed)
+                }
+            }
+        )*
+    };
+}
+impl_non_zero!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
+
+impl<T: PortableHash> PortableHash for Option<T> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Some(value) => {
+                state.write_u8(1);
+                value.hash(state);
+            }
+            None => state.write_u8(0),
+        }
+    }
+}
+
+impl<T: PortableHash, E: PortableHash> PortableHash for Result<T, E> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Ok(value) => {
+                state.write_u8(1);
+                value.hash(state);
+            }
+            Err(error) => {
+                state.write_u8(0);
+                error.hash(state);
+            }
+        }
     }
 }
 

@@ -92,7 +92,8 @@
 //!
 //! # Features
 //!
-//! - `std` (default): Whether [`std`] is available. Isn't currently used for much except tests.
+//! - `std` (default): Whether [`std`] is available. Enables implementations of certain traits for
+//!   types from [`std`], such as [`OsString`](std::ffi::OsString).
 //! - `alloc` (default): Whether [`alloc`] is available. Enables implementations of certain traits
 //!   for types from [`alloc`], such as [`String`](alloc::string::String) and
 //!   [`Vec`](alloc::vec::Vec).
