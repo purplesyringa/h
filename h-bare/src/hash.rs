@@ -289,8 +289,8 @@ macro_rules! impl_str {
         impl PortableHash for $ty {
             #[inline]
             fn hash<H: Hasher>(&self, state: &mut H) {
+                self.len().hash(state);
                 state.write(self.as_bytes());
-                state.write(&[0xff]);
             }
         }
     };
