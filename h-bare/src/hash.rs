@@ -75,8 +75,8 @@ impl Seed {
 ///   the computation to `hash` for [`str`].
 ///
 /// - Unlike [`core::hash::Hash`], the written data must be portable between platforms. For example,
-///   directly writing `usize` into the hasher is a bad idea because of possible differences in
-///   pointer size.
+///   invoking the `write_usize` method of the hasher is incorrect because of possible differences
+///   in pointer size. Use `<usize as PortableHash>::hash` instead.
 ///
 /// - When hashing two objects that compare unequal, the sequence of `write_*` calls *must* be
 ///   different between the two objects. The *first* different `write_*` call must be an invocation
