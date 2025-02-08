@@ -1,3 +1,4 @@
+use proc_macro_error2::emit_call_site_error;
 use syn::{
     parse::{Parse, ParseStream, Result},
     punctuated::Punctuated,
@@ -45,6 +46,7 @@ impl Parse for Context {
             input.parse::<Token![;]>()?;
             Some(path)
         } else {
+            emit_call_site_error!("macros need to be imported from `h` instead of `h_macros`");
             None
         };
 
