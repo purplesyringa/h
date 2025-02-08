@@ -57,24 +57,15 @@ impl State {
                 };
 
                 let integer_type_node = integer_type_node.unwrap_ref();
-                let fits = match integer_type_node.range() {
-                    Ok(range) =>
-                    {
-                        #[expect(clippy::cast_sign_loss, reason = "intended")]
-                        if *negated {
-                            as_u128 >= *range.start() as u128
-                        } else {
-                            as_u128 <= *range.end() as u128
-                        }
-                    }
-                    Err(max) => {
-                        if *negated {
-                            emit_error!(span, "cannot apply unary operator `-` to type `{}`", ty);
-                            self.0 = Err(());
-                            return;
-                        }
-                        as_u128 <= max
-                    }
+                if !integer_type_node.is_signed() && *negated {
+                    emit_error!(span, "cannot apply unary operator `-` to type `{}`", ty);
+                    self.0 = Err(());
+                    return;
+                }
+                let fits = if *negated {
+                    as_u128 >= integer_type_node.min_as_u128()
+                } else {
+                    as_u128 <= integer_type_node.max_as_u128()
                 };
                 if !fits {
                     emit_error!(span, "too large integer (doesn't fit in `{}`)", ty);

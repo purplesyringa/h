@@ -1,4 +1,4 @@
-use core::{fmt, ops::RangeInclusive};
+use core::fmt;
 use proc_macro2::Span;
 use proc_macro_error2::emit_error;
 use syn::spanned::Spanned;
@@ -319,19 +319,46 @@ pub enum IntegerTypeNode {
 }
 
 impl IntegerTypeNode {
-    // For signed integers, returns `Ok(MIN..=MAX)`. For unsigned integers, returns `Err(MAX)`.
-    pub fn range(self) -> Result<RangeInclusive<i128>, u128> {
+    /// Get the minimum value of the integer type, cast to `u128`.
+    ///
+    /// If the type is signed, the value wraps.
+    pub const fn min_as_u128(self) -> u128 {
+        #[expect(clippy::cast_sign_loss, reason = "intended")]
         match self {
-            Self::U8 => Err(u8::MAX.into()),
-            Self::U16 => Err(u16::MAX.into()),
-            Self::U32 => Err(u32::MAX.into()),
-            Self::U64 => Err(u64::MAX.into()),
-            Self::U128 => Err(u128::MAX),
-            Self::I8 => Ok(i8::MIN.into()..=i8::MAX.into()),
-            Self::I16 => Ok(i16::MIN.into()..=i16::MAX.into()),
-            Self::I32 => Ok(i32::MIN.into()..=i32::MAX.into()),
-            Self::I64 => Ok(i64::MIN.into()..=i64::MAX.into()),
-            Self::I128 => Ok(i128::MIN..=i128::MAX),
+            Self::U8 => u8::MIN as u128,
+            Self::U16 => u16::MIN as u128,
+            Self::U32 => u32::MIN as u128,
+            Self::U64 => u64::MIN as u128,
+            Self::U128 => u128::MIN,
+            Self::I8 => i8::MIN as u128,
+            Self::I16 => i16::MIN as u128,
+            Self::I32 => i32::MIN as u128,
+            Self::I64 => i64::MIN as u128,
+            Self::I128 => i128::MIN as u128,
+        }
+    }
+
+    /// Get the maximum value of the integer type, losslessly cast to `u128`.
+    pub const fn max_as_u128(self) -> u128 {
+        match self {
+            Self::U8 => u8::MAX as u128,
+            Self::U16 => u16::MAX as u128,
+            Self::U32 => u32::MAX as u128,
+            Self::U64 => u64::MAX as u128,
+            Self::U128 => u128::MAX,
+            Self::I8 => i8::MAX as u128,
+            Self::I16 => i16::MAX as u128,
+            Self::I32 => i32::MAX as u128,
+            Self::I64 => i64::MAX as u128,
+            Self::I128 => i128::MAX as u128,
+        }
+    }
+
+    /// Check if the type is signed.
+    pub const fn is_signed(self) -> bool {
+        match self {
+            Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::U128 => false,
+            Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128 => true,
         }
     }
 }
