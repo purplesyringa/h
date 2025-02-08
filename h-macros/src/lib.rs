@@ -9,15 +9,12 @@ mod values;
 
 use self::{
     coding::encode_value,
-    hashing::{with_hashable_keys, Callback},
+    hashing::HashableValue,
     parse::{Context, MapArm, WithContext},
     types::TypePtr,
     values::{AsTypedValue, TypedValue, Value},
 };
-use h::{
-    codegen::{Ascribe, CodeGenerator, Codegen, PassThrough},
-    hash::PortableHash,
-};
+use h::codegen::{Ascribe, CodeGenerator, Codegen, PassThrough};
 use proc_macro2::TokenStream;
 use proc_macro_error2::{emit_call_site_error, emit_error, set_dummy};
 use quote::{quote, ToTokens};
@@ -167,48 +164,23 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         return quote! {}.into();
     };
 
-    struct Cb<'a> {
-        input: &'a WithContext<MapArm>,
-        key_type: TokenStream,
-    }
-
-    impl Callback for Cb<'_> {
-        type Output = TokenStream;
-
-        fn call_once<Key: PortableHash + Codegen>(
-            self,
-            keys: impl Iterator<Item = Key>,
-        ) -> TokenStream {
-            generate(
-                &self.input.context,
-                h::Map::<Key, PassThrough>::from_entries(
-                    keys.zip(
-                        self.input
-                            .elements
-                            .iter()
-                            .map(|arm| PassThrough::new(arm.value.to_token_stream())),
-                    )
-                    .collect(),
-                ),
-                |gen| {
-                    let map = gen.path("h::Map");
-                    let key_type = self.key_type;
-                    quote!(#map<#key_type, _>)
-                },
-            )
-        }
-    }
-
-    with_hashable_keys(
+    let map = h::Map::from_entries(
         encoded_keys
             .into_iter()
-            .zip(input.elements.iter().map(|arm| arm.key.to_token_stream())),
-        &inferred_key_type,
-        Cb {
-            input: &input,
-            key_type,
-        },
-    )
+            .zip(input.elements)
+            .map(|(data, element)| {
+                (
+                    HashableValue::new(&inferred_key_type, data, element.key.to_token_stream()),
+                    PassThrough::new(element.value.to_token_stream()),
+                )
+            })
+            .collect(),
+    );
+
+    generate(&input.context, map, |gen| {
+        let map = gen.path("h::Map");
+        quote!(#map<#key_type, _>)
+    })
     .into()
 }
 
@@ -236,40 +208,20 @@ pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         return quote! {}.into();
     };
 
-    struct Cb<'a> {
-        input: &'a WithContext<Expr>,
-        element_type: TokenStream,
-    }
-
-    impl Callback for Cb<'_> {
-        type Output = TokenStream;
-
-        fn call_once<Element: PortableHash + Codegen>(
-            self,
-            elements: impl Iterator<Item = Element>,
-        ) -> TokenStream {
-            generate(
-                &self.input.context,
-                h::Set::<Element>::from_elements(elements.collect()),
-                |gen| {
-                    let set_ty = gen.path("h::Set");
-                    let element_type = self.element_type;
-                    quote!(#set_ty<#element_type>)
-                },
-            )
-        }
-    }
-
-    with_hashable_keys(
+    let set = h::Set::from_elements(
         encoded_elements
             .into_iter()
-            .zip(input.elements.iter().map(Expr::to_token_stream)),
-        &inferred_element_type,
-        Cb {
-            input: &input,
-            element_type,
-        },
-    )
+            .zip(input.elements)
+            .map(|(data, element)| {
+                HashableValue::new(&inferred_element_type, data, element.to_token_stream())
+            })
+            .collect(),
+    );
+
+    generate(&input.context, set, |gen| {
+        let set_ty = gen.path("h::Set");
+        quote!(#set_ty<#element_type>)
+    })
     .into()
 }
 
@@ -296,35 +248,13 @@ pub fn phf(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         return quote! {}.into();
     };
 
-    struct Cb<'a> {
-        input: &'a WithContext<Expr>,
-        key_type: TokenStream,
-    }
+    let phf = h::Phf::from_keys(encoded_keys.into_iter().zip(input.elements).map(
+        |(data, element)| HashableValue::new(&inferred_key_type, data, element.to_token_stream()),
+    ));
 
-    impl Callback for Cb<'_> {
-        type Output = TokenStream;
-
-        fn call_once<Key: PortableHash + Codegen>(
-            self,
-            keys: impl ExactSizeIterator<Item = Key> + Clone,
-        ) -> TokenStream {
-            generate(&self.input.context, h::Phf::<Key>::from_keys(keys), |gen| {
-                let phf_ty = gen.path("h::Phf");
-                let key_type = self.key_type;
-                quote!(#phf_ty<#key_type>)
-            })
-        }
-    }
-
-    with_hashable_keys(
-        encoded_keys
-            .into_iter()
-            .zip(input.elements.iter().map(Expr::to_token_stream)),
-        &inferred_key_type,
-        Cb {
-            input: &input,
-            key_type,
-        },
-    )
+    generate(&input.context, phf, |gen| {
+        let phf_ty = gen.path("h::Phf");
+        quote!(#phf_ty<#key_type>)
+    })
     .into()
 }

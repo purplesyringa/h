@@ -1,14 +1,22 @@
+//! Hashing serialized values with [`Hasher`]s.
+
 use super::types::{IntegerTypeNode, TypeNode, TypePtr};
 use byteorder::{NativeEndian as NE, ReadBytesExt};
 use core::hash::Hasher;
 use h::{
     codegen::{CodeGenerator, Codegen},
-    hash::PortableHash,
+    hash::{PortableHash, Seed},
 };
 use proc_macro2::TokenStream;
 
-// Primitives need to be hashed differently from other values. Chaos ensues.
-
+/// Simulate `<T as Hash>::hash(state)` based on serialized `data` of type `ty`.
+///
+/// The serialized data must have been produced by
+/// [`coding::encode_value`](super::coding::encode_value).
+///
+/// # Panics
+///
+/// Panics if the data could not be deserialized.
 fn hash<H: Hasher>(data: &mut &[u8], ty: &TypePtr, state: &mut H) {
     match ty.unwrap_ref() {
         TypeNode::Integer(integer_type_node) => match integer_type_node.unwrap_ref() {
@@ -55,90 +63,78 @@ fn hash<H: Hasher>(data: &mut &[u8], ty: &TypePtr, state: &mut H) {
     }
 }
 
-struct ComplexValue<'a> {
+/// A typed serialized value.
+///
+/// Unlike [`TypedValue`](super::values::TypedValue), the type is deduplicated among multiple
+/// [`HashableValue`] instances, and data is stored in a serialized format.
+pub struct HashableValue<'a> {
+    /// Type of the value.
     ty: &'a TypePtr,
+    /// Serialized value bytes.
     data: Vec<u8>,
-    pub tokens: TokenStream,
+    /// An expression evaluating to the value.
+    tokens: TokenStream,
 }
 
-impl PortableHash for ComplexValue<'_> {
+impl<'a> HashableValue<'a> {
+    /// Create a new [`HashableValue`] struct.
+    pub const fn new(ty: &'a TypePtr, data: Vec<u8>, tokens: TokenStream) -> Self {
+        Self { ty, data, tokens }
+    }
+}
+
+impl PortableHash for HashableValue<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let mut cursor = &*self.data;
         hash(&mut cursor, self.ty, state);
     }
+
+    fn hash_one(&self, seed: &Seed) -> u64 {
+        // Certain types overload `hash_one`, and we can't exactly construct types dynamically, so
+        // there's a bit of hard-coding here. Keep this in sync with `h_bare::hash`.
+        let mut ty = self.ty;
+        while let TypeNode::Reference(target) = ty.unwrap_ref() {
+            ty = target;
+        }
+
+        if let TypeNode::Integer(integer_type_node) = self.ty.unwrap_ref() {
+            let mut cursor = &*self.data;
+            match integer_type_node.unwrap_ref() {
+                IntegerTypeNode::U8 => cursor.read_u8().unwrap().hash_one(seed),
+                IntegerTypeNode::U16 => cursor.read_u16::<NE>().unwrap().hash_one(seed),
+                IntegerTypeNode::U32 => cursor.read_u32::<NE>().unwrap().hash_one(seed),
+                IntegerTypeNode::U64 => cursor.read_u64::<NE>().unwrap().hash_one(seed),
+                IntegerTypeNode::U128 => cursor.read_u128::<NE>().unwrap().hash_one(seed),
+                IntegerTypeNode::I8 => cursor.read_i8().unwrap().hash_one(seed),
+                IntegerTypeNode::I16 => cursor.read_i16::<NE>().unwrap().hash_one(seed),
+                IntegerTypeNode::I32 => cursor.read_i32::<NE>().unwrap().hash_one(seed),
+                IntegerTypeNode::I64 => cursor.read_i64::<NE>().unwrap().hash_one(seed),
+                IntegerTypeNode::I128 => cursor.read_i128::<NE>().unwrap().hash_one(seed),
+            }
+        } else {
+            // Default case: `hash_one` for `(T,)` constructs a hasher and calls
+            // `<T as PortableHash>::hash`, which is exactly what we want. Saves us from hard-coding
+            // rapidhash here.
+            AsIs(self).hash_one(seed)
+        }
+    }
 }
 
-impl Codegen for ComplexValue<'_> {
+impl Codegen for HashableValue<'_> {
     fn generate_piece(&self, _gen: &mut CodeGenerator) -> TokenStream {
         self.tokens.clone()
     }
 }
 
-pub trait Callback {
-    type Output;
-
-    fn call_once<Key: PortableHash + Codegen>(
-        self,
-        keys: impl ExactSizeIterator<Item = Key> + Clone,
-    ) -> Self::Output;
-}
-
-/// # Safety
+/// Transparent hashable wrapper without a `hash_one` overload.
 ///
-/// `keys` must be encoded variants of `T`, where `T` is a primitive.
-unsafe fn with_primitive<T: PortableHash + Codegen, Cb: Callback>(
-    keys: impl ExactSizeIterator<Item = (Vec<u8>, TokenStream)> + Clone,
-    cb: Cb,
-    add_reference: bool,
-) -> Cb::Output {
-    let keys = keys.map(|key| key.0.as_ptr().cast::<T>().read_unaligned());
-    if add_reference {
-        // Allocations. Eugh.
-        let keys: Vec<T> = keys.collect();
-        cb.call_once(keys.iter())
-    } else {
-        cb.call_once(keys)
-    }
-}
+/// Hashing this type is guaranteed to produce the same result as creating a hasher (internally
+/// rapidhash) and invoking `<T as PortableHash>::hash`, ignoring the specialized
+/// `<T as PortableHash>::hash_one` method if present.
+struct AsIs<T>(T);
 
-fn with_integer_keys<Cb: Callback>(
-    keys: impl ExactSizeIterator<Item = (Vec<u8>, TokenStream)> + Clone,
-    key_type: IntegerTypeNode,
-    cb: Cb,
-    add_reference: bool,
-) -> Cb::Output {
-    match key_type {
-        IntegerTypeNode::U8 => unsafe { with_primitive::<u8, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::U16 => unsafe { with_primitive::<u16, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::U32 => unsafe { with_primitive::<u32, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::U64 => unsafe { with_primitive::<u64, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::U128 => unsafe { with_primitive::<u128, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::I8 => unsafe { with_primitive::<i8, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::I16 => unsafe { with_primitive::<i16, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::I32 => unsafe { with_primitive::<i32, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::I64 => unsafe { with_primitive::<i64, Cb>(keys, cb, add_reference) },
-        IntegerTypeNode::I128 => unsafe { with_primitive::<i128, Cb>(keys, cb, add_reference) },
+impl<T: PortableHash> PortableHash for AsIs<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
-}
-
-pub fn with_hashable_keys<Cb: Callback>(
-    keys: impl ExactSizeIterator<Item = (Vec<u8>, TokenStream)> + Clone,
-    key_type: &TypePtr,
-    cb: Cb,
-) -> Cb::Output {
-    if let TypeNode::Integer(integer_type_node) = key_type.unwrap_ref() {
-        return with_integer_keys(keys, *integer_type_node.unwrap_ref(), cb, false);
-    }
-
-    if let TypeNode::Reference(target) = key_type.unwrap_ref() {
-        if let TypeNode::Integer(integer_type_node) = target.unwrap_ref() {
-            return with_integer_keys(keys, *integer_type_node.unwrap_ref(), cb, true);
-        }
-    }
-
-    cb.call_once(keys.map(|key| ComplexValue {
-        ty: key_type,
-        data: key.0,
-        tokens: key.1,
-    }))
 }

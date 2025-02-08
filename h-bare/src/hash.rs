@@ -140,6 +140,8 @@ pub trait PortableHash {
     /// This means that as long as `seed.high == 0`, the hash of an integer is invariant under sign-
     /// or zero-extending it to 128 bits (like `as u128` does).
     ///
+    /// The list of built-in overloads needs to be kept in sync with `h_macros::hashing`.
+    ///
     /// For other types, the `hash` method is applied to [`RapidHasher`](rapidhash::RapidHasher),
     /// with `seed.low` used as the rapidhash seed.
     #[inline]
