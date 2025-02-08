@@ -138,7 +138,9 @@ fn generate<T: Codegen>(
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    set_dummy_with_ty(&quote!(::h::Map<_, _>));
+    // Depending on whether `mut;` is present, we either need to emit `&Map` or `Map`. If parsing
+    // fails, we have no idea what's more correct to emit, so let's just emit `_` instead.
+    set_dummy_with_ty(&quote!(_));
 
     let input = parse_macro_input!(item as WithContext<MapArm>);
 
@@ -156,7 +158,11 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     } else {
         quote!(_)
     };
-    set_dummy_with_ty(&quote!(::h::Map<#key_type, _>));
+    if input.context.mutability.is_some() {
+        set_dummy_with_ty(&quote!(::h::Map<#key_type, _>));
+    } else {
+        set_dummy_with_ty(&quote!(&::h::Map<#key_type, _>));
+    }
 
     let Ok((inferred_key_type, encoded_keys)) =
         parse_keys(&input.context, input.elements.iter().map(|arm| &arm.key))
@@ -187,7 +193,7 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    set_dummy_with_ty(&quote!(::h::Set<_>));
+    set_dummy_with_ty(&quote!(&::h::Set<_>));
 
     let input = parse_macro_input!(item as WithContext<Expr>);
 
@@ -200,7 +206,7 @@ pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     } else {
         quote!(_)
     };
-    set_dummy_with_ty(&quote!(::h::Set<#element_type>));
+    set_dummy_with_ty(&quote!(&::h::Set<#element_type>));
 
     let Ok((inferred_element_type, encoded_elements)) =
         parse_keys(&input.context, input.elements.iter())
@@ -228,7 +234,7 @@ pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn phf(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    set_dummy_with_ty(&quote!(::h::Phf<_>));
+    set_dummy_with_ty(&quote!(&::h::Phf<_>));
 
     let input = parse_macro_input!(item as WithContext<Expr>);
 
@@ -241,7 +247,7 @@ pub fn phf(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     } else {
         quote!(_)
     };
-    set_dummy_with_ty(&quote!(::h::Phf<#key_type>));
+    set_dummy_with_ty(&quote!(&::h::Phf<#key_type>));
 
     let Ok((inferred_key_type, encoded_keys)) = parse_keys(&input.context, input.elements.iter())
     else {
