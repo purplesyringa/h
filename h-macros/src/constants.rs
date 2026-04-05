@@ -1,6 +1,11 @@
+//! Built-in constants.
+//!
+//! This module lists path-based constants usable in keys, such as `u8::MAX`.
+
 use super::values::{AsTypedValue, TypedValue};
 use proc_macro2::Span;
 
+/// The internals of [`get_constant`].
 macro_rules! constants {
     ($path:expr, $span:expr, { $($name:path),* $(,)? }) => {
         match $path {
@@ -10,6 +15,12 @@ macro_rules! constants {
     }
 }
 
+/// Get a constant based on the path.
+///
+/// The path must be normalized and have no leading `"::"`, e.g. `"u8::MAX"`.
+///
+/// `span` is used as the span of the constructed value for the purpose of type inference. If the
+/// constant with the given path does not exist, returns [`None`].
 pub fn get_constant(path: &str, span: Span) -> Option<TypedValue> {
     Some(constants!(path, span, {
         i8::MIN, i8::MAX,

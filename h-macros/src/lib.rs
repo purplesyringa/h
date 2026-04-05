@@ -1,3 +1,5 @@
+//! This crate provides procedural macros for [`h`](https://docs.rs/h). Use that crate instead.
+
 #![expect(clippy::wildcard_enum_match_arm, reason = "too many false positives")]
 
 mod coding;
@@ -21,6 +23,18 @@ use quote::{quote, ToTokens};
 use std::collections::HashMap;
 use syn::{parse_macro_input, spanned::Spanned, Expr};
 
+/// Parse keys of a PHF.
+///
+/// Receives an iterator over key expressions. Returns the inferred key type along with a serialized
+/// representation of keys valid under the key type.
+///
+/// `keys` should be a view into a collection supporting efficient random-access, realistically
+/// a mapped slice iterator.
+///
+/// # Errors
+///
+/// Emits errors and returns `Err(())` if keys or values could not be parsed, unified, or evaluated,
+/// or if there are duplicate keys.
 #[expect(clippy::needless_pass_by_value, reason = "needlessly complicates API")]
 fn parse_keys<'a>(
     context: &Context,
@@ -94,24 +108,39 @@ fn parse_keys<'a>(
     Ok((key_type, encoded_keys))
 }
 
+/// Configure [`proc_macro_error2`] to unify the macro return type with `ty` when errors are
+/// emitted.
 fn set_dummy_with_ty(ty: &TokenStream) {
     // Stupid-ass warnings
     set_dummy(quote! {
+        // If `proc_macro_call` isn't invoked, a warning is emitted.
         if false {
             proc_macro_call!();
         }
 
+        // The generated code returns `unimplemented!()`, so we have to redefine this macro to
+        // change the returned type.
         macro_rules! unimplemented {
             () => {{
+                // Putting `loop {}` or anything like that outside of a separate function leads to
+                // dead code warnings.
                 fn conjure<T>() -> T {
                     unreachable!();
                 }
+                // As `#ty` may reference generic parameters, it cannot be used in the context of
+                // `fn conjure` and must be supplied this way.
                 conjure::<#ty>()
             }};
         }
     });
 }
 
+/// Generate code for a codegen-able value.
+///
+/// This yields an expression that evaluates to `value` or `&value`, depending on whether mutability
+/// is enabled in the context.
+///
+/// The `ty` callback should return a type expression evaluating to `T`.
 fn generate<T: Codegen>(
     context: &Context,
     value: T,
@@ -135,6 +164,9 @@ fn generate<T: Codegen>(
 // `proc_macro_error(proc_macro_hack)` does not enable the `proc_macro_hack` crate. It only tweaks
 // the error output to be valid in expression position.
 
+/// Create a [`Map`](h::Map) in compile time.
+///
+/// See documentation of the `h` crate for more information.
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -190,6 +222,9 @@ pub fn map(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
+/// Create a [`Set`](h::Set) in compile time.
+///
+/// See documentation of the `h` crate for more information.
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -231,6 +266,9 @@ pub fn set(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
+/// Create a [`Phf`](h::Phf) in compile time.
+///
+/// See documentation of the `h` crate for more information.
 #[proc_macro_error2::proc_macro_error(proc_macro_hack)]
 #[proc_macro]
 pub fn phf(item: proc_macro::TokenStream) -> proc_macro::TokenStream {

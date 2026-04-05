@@ -1,3 +1,5 @@
+//! High-level macro input parsing.
+
 use proc_macro_error2::emit_call_site_error;
 use syn::{
     parse::{Parse, ParseStream, Result},
@@ -5,9 +7,12 @@ use syn::{
     Expr, Path, Token, Type,
 };
 
+/// `key => value` arm of a `map!` macro.
 #[derive(Debug)]
 pub struct MapArm {
+    /// The key part.
     pub key: Expr,
+    /// The value part.
     pub value: Expr,
 }
 
@@ -20,14 +25,31 @@ impl Parse for MapArm {
     }
 }
 
+/// Annotations in macro input.
+///
+/// This includes both user-supplied annotations like `for _;` and `mut;` and annotations generated
+/// by the declarative macros in the `h` crate, like `crate _;`.
 #[derive(Debug)]
 pub struct Context {
+    /// Whether using the `alloc` crate is banned.
     pub no_alloc: bool,
+    /// The path to the `h` crate provided with `crate _;`.
+    ///
+    /// Used to generate paths to items inside `h` that work when the `map!` macro is invoked from
+    /// another macro (e.g. `helper!` using `$crate::h::map!`) which is then in turn used in another
+    /// crate.
+    ///
+    /// This is `None` if the annotation is omitted, i.e. if proc macros from `h_macros` are invoked
+    /// directly rather than via the `h` declarative macros, in which case we emit a diagnostic but
+    /// keep going.
     pub h_crate: Option<Path>,
+    /// The key type hint provided with `for _;`.
     pub key_type: Option<Type>,
+    /// The `mut;` annotation for the `map!` macro.
     pub mutability: Option<Token![mut]>,
 }
 
+/// Custom [`syn`] keywords.
 mod kw {
     syn::custom_keyword!(no_alloc);
 }
@@ -74,12 +96,18 @@ impl Parse for Context {
     }
 }
 
+/// Type alias for `Token![,]`.
+///
+/// This is necessary because using `Token![,]` inside structs with `#[derive]` attributes results
+/// in "`derive` cannot be used on items with type macros".
 type Comma = Token![,];
 
+/// Parsed input containing context together with a sequence of `Element`.
 #[derive(Debug)]
 pub struct WithContext<Element> {
+    /// The shared context.
     pub context: Context,
-    // Using `Token![,]` directly here leads to "`derive` cannot be used on items with type macros".
+    /// Individual elements.
     pub elements: Punctuated<Element, Comma>,
 }
 

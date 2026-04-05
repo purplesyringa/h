@@ -1,3 +1,21 @@
+//! Value parsing and handling.
+//!
+//! The core of this module is the [`AsTypedValue`] trait, which produces a [`TypedValue`] from
+//! an object, usually a `syn` type (enabling parsing) or a Rust object (enabling constant
+//! generation).
+//!
+//!
+//! # Data model
+//!
+//! A [`Value`] represents an arbitrary parsed value. This does not alone determine the exact type
+//! of the value. For example, `1u32` and `1u64` are parsed into the exact same [`Value`].
+//!
+//! A [`TypedValue`] is a pair of a [`TypePtr`] denoting the actual inferred type and a [`Value`]
+//! storing the data.
+//!
+//! [`Value`] (and [`TypedValue`] by proxy) can also store a sentinel [`Value::Inconsistent`] value,
+//! which represents a parsing or evaluation error.
+
 use super::{
     constants::get_constant,
     types::{type_ptr, IntegerTypeNode, Node, NodePtr, NodeWithSpan, TypeNode, TypePtr},

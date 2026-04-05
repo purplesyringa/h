@@ -105,6 +105,7 @@
 
 #![no_std]
 #![cfg_attr(doc, feature(doc_auto_cfg))]
+#![warn(clippy::cargo)]
 
 // For docs
 #[cfg(feature = "alloc")]

@@ -3,6 +3,7 @@
 #![no_std]
 #![cfg_attr(doc, feature(doc_auto_cfg))]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![warn(clippy::cargo)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
