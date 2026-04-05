@@ -69,7 +69,7 @@ impl<'buffer, T> Bucket<'buffer, T> {
     }
 
     /// Iterate over the pushed elements.
-    fn iter(&self) -> core::iter::Chain<core::slice::Iter<T>, core::slice::Iter<T>> {
+    fn iter(&self) -> core::iter::Chain<core::slice::Iter<'_, T>, core::slice::Iter<'_, T>> {
         self.reserved.iter().chain(self.overflow.iter())
     }
 }
