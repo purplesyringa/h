@@ -104,7 +104,7 @@
 //! - `serde`: Enables [serde](https://serde.rs/) support.
 
 #![no_std]
-#![cfg_attr(doc, feature(doc_auto_cfg))]
+#![cfg_attr(doc, feature(doc_cfg))]
 #![warn(clippy::cargo)]
 
 // For docs

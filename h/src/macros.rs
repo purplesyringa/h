@@ -43,7 +43,6 @@
 //!
 //! Note that it's only necessary to specify types that could not be inferred otherwise, although
 //! `for (u64, &str);` would work too.
-use super::*;
 
 #[doc(hidden)]
 pub use h_macros;

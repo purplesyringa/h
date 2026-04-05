@@ -1,7 +1,7 @@
 //! This crate provides types for [`h`](https://docs.rs/h). Use that crate instead.
 
 #![no_std]
-#![cfg_attr(doc, feature(doc_auto_cfg))]
+#![cfg_attr(doc, feature(doc_cfg))]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(clippy::cargo)]
 
