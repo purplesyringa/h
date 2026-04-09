@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install Rust
+        run: rustup update 1.85.0 && rustup default 1.85.0
+      - name: Install rustfmt and clippy
+        run: rustup component add rustfmt clippy
+      - name: Rustfmt
+        run: cargo fmt -- --check
+      - name: Check without features
+        run: cargo check
+      - name: Check serde only
+        run: cargo check -F serde
+      - name: Check build only
+        run: cargo check -F build
+      - name: Check all features
+        run: cargo check --all-features
+      - name: Clippy
+        run: cargo clippy --all-features
+
+  test-msrv:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Install Rust
+        run: rustup update 1.85.0 && rustup default 1.85.0
+      - name: Test
+        run: cargo test --all-features -- --nocapture --include-ignored
+
+  test-nightly:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Install Rust
+        run: rustup update nightly && rustup default nightly
+      - name: Test
+        run: cargo test --all-features -- --nocapture --include-ignored
+
+  miri:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Install Rust
+        run: rustup update nightly && rustup default nightly
+      - name: Install Miri
+        run: rustup component add miri
+      - name: Test
+        run: cargo miri test --all-features

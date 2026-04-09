@@ -1,0 +1,59 @@
+[package]
+name = "hyble"
+description = "Practical, efficient perfect hash functions"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/purplesyringa/hyble"
+readme = "README.md"
+keywords = ["perfect", "hashing", "phf"]
+categories = ["data-structures", "no-std", "no-std::no-alloc"]
+edition = "2024"
+rust-version = "1.85.0"
+
+[dependencies]
+fixed-slice-vec = { version = "0.10.0", optional = true }
+serde = { version = "1", optional = true, default-features = false, features = ["alloc", "derive"] }
+thiserror = { version = "2.0.3", default-features = false }
+
+[dev-dependencies]
+rapidhash = { version = "4.4.1", default-features = false }
+ruzstd = { version = "0.8.0", default-features = false, features = ["std"] }
+
+[features]
+alloc = []
+build = ["alloc", "dep:fixed-slice-vec"]
+serde = ["alloc", "dep:serde"]
+
+[profile.test]
+opt-level = 3
+
+[lints.rust]
+missing_docs = "warn"
+
+[lints.rustdoc]
+missing_crate_level_docs = "warn"
+unescaped_backticks = "warn"
+
+[lints.clippy]
+cargo = "warn"
+pedantic = "warn"
+alloc_instead_of_core = "warn"
+allow_attributes_without_reason = "warn"
+default_numeric_fallback = "warn"
+deref_by_slicing = "warn"
+doc_markdown = "warn"
+missing_assert_message = "warn"
+pub_without_shorthand = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+same_name_method = "warn"
+semicolon_inside_block = "warn"
+std_instead_of_alloc = "warn"
+std_instead_of_core = "warn"
+tests_outside_test_module = "warn"
+# undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
