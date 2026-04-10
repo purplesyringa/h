@@ -26,15 +26,50 @@ fn test_phf<T, Seed>(
     );
 }
 
+fn test_integers(n: usize) {
+    // This seed does not have collisions in the first 10M elements, so no need to deduplicate
+    // elements, which takes time.
+    assert!(n <= 10_000_000, "too many elements for this test");
+    let mut rng = RapidRng::new(0x439f26744da767e5);
+    let keys: Vec<u64> = (0..n).map(|_| rng.next()).collect();
+    let seeds = core::iter::from_fn(|| Some(rng.next()));
+    test_phf(&keys, seeds, |key, seed| key.wrapping_mul(*seed));
+}
+
+#[test]
+fn build_10_integers() {
+    test_integers(10);
+}
+
+#[test]
+fn build_100_integers() {
+    test_integers(100);
+}
+
+#[test]
+fn build_1k_integers() {
+    test_integers(1_000);
+}
+
+#[test]
+fn build_10k_integers() {
+    test_integers(10_000);
+}
+
+#[test]
+fn build_100k_integers() {
+    test_integers(100_000);
+}
+
+#[test]
+fn build_1m_integers() {
+    test_integers(1_000_000);
+}
+
 #[test]
 #[ignore = "needs a lot of memory"]
 fn build_10m_integers() {
-    // This seed does not have collisions in the first 10M elements, so no need to deduplicate
-    // elements, which takes time.
-    let mut rng = RapidRng::new(0x439f26744da767e5);
-    let keys: Vec<u64> = (0..10000000).map(|_| rng.next()).collect();
-    let seeds = core::iter::from_fn(|| Some(rng.next()));
-    test_phf(&keys, seeds, |key, seed| key.wrapping_mul(*seed));
+    test_integers(10_000_000);
 }
 
 fn read_testdata(name: &str) -> Vec<u8> {
