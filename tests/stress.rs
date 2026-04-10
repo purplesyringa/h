@@ -6,13 +6,16 @@ use hyble::Phf;
 use rapidhash::{quality::SeedableState, rng::RapidRng};
 use ruzstd::{decoding::StreamingDecoder, io::Read};
 use std::fs::File;
+use std::time::Instant;
 
 fn test_phf<T, Seed>(
     keys: &[T],
     seeds: impl Iterator<Item = Seed>,
     hasher: impl Fn(&T, &Seed) -> u64,
 ) {
+    let start = Instant::now();
     let (seed, phf) = Phf::build(keys, seeds, &hasher);
+    println!("{} keys: {:?} elapsed", keys.len(), start.elapsed());
     let mut indices: Vec<usize> = keys.iter().map(|key| phf.get(hasher(key, &seed))).collect();
     indices.sort_unstable();
     let capacity = phf.capacity();
@@ -101,7 +104,7 @@ fn build_500k_strings() {
 
 #[test]
 #[ignore = "needs a lot of memory"]
-fn build_10m_strings() {
+fn build_15m_strings() {
     let testdata = read_testdata("rockyou.txt");
     let mut keys: Vec<&[u8]> = Vec::new();
     for line in testdata.split(|&c| c == b'\n') {
