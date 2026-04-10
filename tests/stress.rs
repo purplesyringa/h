@@ -76,7 +76,7 @@ fn build_10m_integers() {
 }
 
 fn read_testdata(name: &str) -> Vec<u8> {
-    let path = format!("{}/tests/{}.zst", env!("CARGO_MANIFEST_DIR"), name);
+    let path = format!("tests/{}.zst", name);
     let file = File::open(path).expect("Failed to open file");
     let mut decoder = StreamingDecoder::new(file).expect("Failed to decode zstd");
     let mut result = Vec::new();
