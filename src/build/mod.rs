@@ -22,8 +22,8 @@ impl Phf {
     ///
     /// # Panics
     ///
-    /// Panics if `keys` contains more than `usize::MAX / 2` elements, or if `seeds` is finite and
-    /// runs out.
+    /// Panics if `keys` contains more than `2^32` or `usize::MAX / 2` elements, whichever is
+    /// smaller, or if `seeds` is finite and runs out.
     #[must_use]
     pub fn build<T, Seed>(
         keys: &[T],
@@ -34,8 +34,12 @@ impl Phf {
             return (seeds.next().expect("no seeds"), Self::new());
         }
 
-        // Asserting this is enough to guarantee that `approx_range` is far from `usize::MAX`.
-        assert!(keys.len() <= usize::MAX / 2, "Too many keys");
+        // Asserting this is enough to guarantee that `approx_range` is far from `usize::MAX` and
+        // that `(Approx, Bucket)` fits in 64 bits.
+        assert!(
+            keys.len() <= usize::MAX / 2 && keys.len() <= u32::MAX as usize,
+            "Too many keys"
+        );
 
         // Use different load factors for different sizes. This was tuned experimentally. We used to
         // increase `approx_range` after each failure to improve the chances of success, but that
@@ -61,10 +65,10 @@ impl Phf {
 /// Keys, split into buckets.
 struct Buckets {
     /// Approx values of keys, ordered such that all buckets are consecutive
-    approxs: Vec<u64>,
+    approxs: Vec<u32>,
 
     /// Buckets, grouped by size. The tuple is `(Bucket, left)`.
-    by_size: Vec<Vec<(usize, usize)>>,
+    by_size: Vec<Vec<(u32, u32)>>,
 
     /// The `approx_range` parameter this object is valid under
     approx_range: usize,
@@ -108,12 +112,16 @@ impl Buckets {
 
         // Iterate over buckets
         let keys_len = keys.len();
-        let mut approxs: Vec<u64> = Vec::with_capacity(keys.len());
+        let mut approxs: Vec<u32> = Vec::with_capacity(keys.len());
         let mut by_size = Vec::new();
         group_by_key(
             keys.map(|key| {
+                // Put `Bucket` in the bottom `bucket_bits` bits and `Approx` right above it. This
+                // can be improved as
+                //     ((hash as u128 * approx_range as u128) >> (64 - bucket_bits)) as u64
+                // ...but LLVM struggles with optimizing 128-bit shifts like that.
                 let (approx, bucket) = to_approx_bucket(key, approx_range, bucket_shift);
-                (approx << bucket_bits) | bucket as u64
+                ((approx as u64) << bucket_bits) | bucket as u64
             }),
             keys_len,
             bucket_bits,
@@ -135,7 +143,7 @@ impl Buckets {
                 while by_size.len() <= size {
                     by_size.push(Vec::new());
                 }
-                by_size[size].push((bucket as usize, approxs.len()));
+                by_size[size].push((bucket, approxs.len() as u32));
                 approxs.extend(approx_for_bucket);
                 Ok(())
             },
@@ -154,15 +162,15 @@ impl Buckets {
     /// Iterate over buckets in decreasing size order.
     ///
     /// Yields `(Bucket, [Approx])`.
-    fn iter(&self) -> impl Iterator<Item = (usize, &[u64])> {
+    fn iter(&self) -> impl Iterator<Item = (u32, &[u32])> {
         self.by_size
             .iter()
             .enumerate()
             .rev()
             .flat_map(move |(size, buckets)| {
-                buckets
-                    .iter()
-                    .map(move |&(bucket, start)| (bucket, &self.approxs[start..start + size]))
+                buckets.iter().map(move |&(bucket, start)| {
+                    (bucket, &self.approxs[start as usize..start as usize + size])
+                })
             })
     }
 
@@ -180,7 +188,7 @@ impl Buckets {
         for (bucket, approx_for_bucket) in self.iter() {
             // Find non-colliding displacement. On failure, return None.
             let displacement = unsafe { find_valid_displacement(approx_for_bucket, &free) }?;
-            displacements[bucket] = displacement;
+            displacements[bucket as usize] = displacement;
 
             for approx in approx_for_bucket {
                 let index = *approx as usize + displacement as usize;
@@ -212,7 +220,7 @@ impl Buckets {
 /// # Safety
 ///
 /// `free` must contain at least `approx + 65535` bits.
-unsafe fn find_valid_displacement(approx_for_bucket: &[u64], free: &BitMap) -> Option<u16> {
+unsafe fn find_valid_displacement(approx_for_bucket: &[u32], free: &BitMap) -> Option<u16> {
     // Skip a few of the top valid displacements to avoid going out-of-bounds when reading masks.
     for displacement_base in (0..=u16::MAX - 64).step_by(57) {
         let mut global_free_mask = u64::MAX;

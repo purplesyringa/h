@@ -72,9 +72,9 @@ fn group_by_key_fallback<E>(
     elements: impl Iterator<Item = u64> + Clone,
     elements_len: usize,
     key_bitness: u32,
-    acc: u64,
+    acc: u32,
     acc_bitness: u32,
-    callback: &mut impl FnMut(&[u64], u64) -> Result<(), E>,
+    callback: &mut impl FnMut(&[u32], u32) -> Result<(), E>,
 ) -> Result<(), E> {
     let n_groups = 1 << key_bitness;
 
@@ -88,10 +88,10 @@ fn group_by_key_fallback<E>(
         group_ptrs[i] = group_ptrs[i - 1] + counts[i - 1];
     }
 
-    let mut buffer = vec![MaybeUninit::uninit(); elements_len];
+    let mut buffer = vec![MaybeUninit::<u32>::uninit(); elements_len];
     for element in elements {
         let group_ptr = &mut group_ptrs[element as usize & (n_groups - 1)];
-        buffer[*group_ptr].write(element >> key_bitness);
+        buffer[*group_ptr].write((element >> key_bitness) as u32);
         *group_ptr += 1;
     }
 
@@ -108,8 +108,8 @@ fn group_by_key_fallback<E>(
             );
             let group = &buffer[start_ptr..end_ptr];
             // XXX: This is ad-hoc `assume_init_ref`, since our MSRV doesn't include it.
-            let group = unsafe { &*(core::ptr::from_ref(group) as *const [u64]) };
-            callback(group, acc | ((i as u64) << acc_bitness))?;
+            let group = unsafe { &*(core::ptr::from_ref(group) as *const [u32]) };
+            callback(group, acc | ((i as u32) << acc_bitness))?;
         }
     }
 
@@ -134,15 +134,15 @@ fn group_by_key_fallback<E>(
 ///
 /// # Panics
 ///
-/// Might panic if `key_bitness + acc_bitness >= 64` or if `elements_len` does not match the number
+/// Might panic if `key_bitness + acc_bitness >= 32` or if `elements_len` does not match the number
 /// of elements in `elements`.
 pub fn group_by_key<E>(
     elements: impl Iterator<Item = u64> + Clone,
     elements_len: usize,
     key_bitness: u32,
-    acc: u64,
+    acc: u32,
     acc_bitness: u32,
-    callback: &mut impl FnMut(&[u64], u64) -> Result<(), E>,
+    callback: &mut impl FnMut(&[u32], u32) -> Result<(), E>,
 ) -> Result<(), E> {
     /// The step at which `key` is consumed. `2 ** BITS` buckets are allocated.
     const BITS: u32 = 8;
@@ -178,7 +178,7 @@ pub fn group_by_key<E>(
             bucket.iter().copied(),
             bucket.len(),
             key_bitness - BITS,
-            acc | ((i as u64) << acc_bitness),
+            acc | ((i as u32) << acc_bitness),
             acc_bitness + BITS,
             callback,
         )?;

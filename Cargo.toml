@@ -40,6 +40,7 @@ pedantic = "warn"
 alloc_instead_of_core = "warn"
 allow_attributes_without_reason = "warn"
 cast_possible_truncation = { level = "allow", priority = 1 } # too many false positives
+checked_conversions = { level = "allow", priority = 1 }
 default_numeric_fallback = "warn"
 deref_by_slicing = "warn"
 doc_markdown = "warn"
