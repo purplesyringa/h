@@ -22,7 +22,7 @@ impl Phf {
     ///
     /// # Panics
     ///
-    /// Panics if `keys` contains more than `isize::MAX / 2` elements, or if `seeds` is finite and
+    /// Panics if `keys` contains more than `usize::MAX / 2` elements, or if `seeds` is finite and
     /// runs out.
     #[must_use]
     pub fn build<T, Seed>(
@@ -34,21 +34,16 @@ impl Phf {
             return (seeds.next().expect("no seeds"), Self::new());
         }
 
-        // Asserting this is enough to guarantee that `approx_range` never overflows.
-        assert!(keys.len() <= isize::MAX as usize / 2, "Too many keys");
+        // Asserting this is enough to guarantee that `approx_range` is far from `usize::MAX`.
+        assert!(keys.len() <= usize::MAX / 2, "Too many keys");
 
+        // Use different load factors for different sizes. This was tuned experimentally. We used to
+        // increase `approx_range` after each failure to improve the chances of success, but that
+        // doesn't seem necessary.
         let percent = keys.len().div_ceil(100);
-
-        // Don't let `approx_range` grow beyond this
-        let max_approx_range = (keys.len() + 5 * percent).next_power_of_two();
-
-        // Start with different load factors for different sizes. This was tuned experimentally.
         let coeff = keys.len().div_ceil(1_000_000).min(5);
-        let mut approx_range = keys.len() + coeff * percent;
+        let approx_range = keys.len() + coeff * percent;
 
-        // Increase `approx_range` exponentially by 0.5% on each iteration until reaching a power of
-        // two size. This protects against displacements getting out of range on large input. For
-        // good hashes, this loop terminates quickly.
         for seed in seeds {
             if let Some(buckets) =
                 Buckets::try_from_keys(keys.iter().map(|key| hasher(key, &seed)), approx_range)
@@ -57,9 +52,6 @@ impl Phf {
                     return (seed, phf);
                 }
             }
-            // Both increase the hash space and change the hash function. This is especially
-            // important for infinite families, which wouldn't progress otherwise.
-            approx_range = (approx_range + approx_range.div_ceil(200)).min(max_approx_range);
         }
 
         panic!("ran out of imperfect hash family instances")
