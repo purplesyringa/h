@@ -103,28 +103,23 @@ impl Buckets {
 
         // At least two buckets are required so that bucket_shift < 64
         let bucket_count = keys.len().div_ceil(Self::LAMBDA).next_power_of_two().max(2);
-        let bucket_shift = 64 - bucket_count.ilog2();
+        let bucket_bits = bucket_count.ilog2();
+        let bucket_shift = 64 - bucket_bits;
 
         // Iterate over buckets
         let keys_len = keys.len();
-        let mut approxs = Vec::with_capacity(keys.len());
+        let mut approxs: Vec<u64> = Vec::with_capacity(keys.len());
         let mut by_size = Vec::new();
         group_by_key(
-            keys,
+            keys.map(|key| {
+                let (approx, bucket) = to_approx_bucket(key, approx_range, bucket_shift);
+                (approx << bucket_bits) | bucket as u64
+            }),
             keys_len,
-            &mut |key| key.wrapping_mul(approx_range as u64),
-            bucket_count.ilog2(),
-            bucket_shift,
-            &mut |keys_for_bucket| {
-                let left = approxs.len();
-                let mut bucket = 0;
-                for key in keys_for_bucket {
-                    let approx;
-                    (approx, bucket) = to_approx_bucket(key, approx_range, bucket_shift);
-                    approxs.push(approx);
-                }
-                let approx_for_bucket = &mut approxs[left..];
-
+            bucket_bits,
+            0,
+            0,
+            &mut |approx_for_bucket, bucket| {
                 // Ensure that Approx values don't collide inside the bucket. The bucket size is
                 // expected to be very small, so quadratic approach is faster than sorting.
                 if approx_for_bucket
@@ -140,7 +135,8 @@ impl Buckets {
                 while by_size.len() <= size {
                     by_size.push(Vec::new());
                 }
-                by_size[size].push((bucket, left));
+                by_size[size].push((bucket as usize, approxs.len()));
+                approxs.extend(approx_for_bucket);
                 Ok(())
             },
         )

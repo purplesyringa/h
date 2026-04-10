@@ -68,19 +68,19 @@ impl<'buffer, T> Bucket<'buffer, T> {
 /// # Panics
 ///
 /// Might panic if `elements_len` does not match the number of elements in `elements`.
-fn group_by_key_fallback<T: Copy, E>(
-    elements: impl Iterator<Item = T> + Clone,
+fn group_by_key_fallback<E>(
+    elements: impl Iterator<Item = u64> + Clone,
     elements_len: usize,
-    key: &mut impl FnMut(T) -> u64,
     key_bitness: u32,
-    base_shift: u32,
-    callback: &mut impl FnMut(&mut dyn Iterator<Item = T>) -> Result<(), E>,
+    acc: u64,
+    acc_bitness: u32,
+    callback: &mut impl FnMut(&[u64], u64) -> Result<(), E>,
 ) -> Result<(), E> {
     let n_groups = 1 << key_bitness;
 
     let mut counts: Vec<usize> = vec![0; n_groups];
     for element in elements.clone() {
-        counts[(key(element) >> base_shift) as usize & (n_groups - 1)] += 1;
+        counts[element as usize & (n_groups - 1)] += 1;
     }
 
     let mut group_ptrs: Vec<usize> = vec![0; n_groups];
@@ -90,8 +90,8 @@ fn group_by_key_fallback<T: Copy, E>(
 
     let mut buffer = vec![MaybeUninit::uninit(); elements_len];
     for element in elements {
-        let group_ptr = &mut group_ptrs[(key(element) >> base_shift) as usize & (n_groups - 1)];
-        buffer[*group_ptr].write(element);
+        let group_ptr = &mut group_ptrs[element as usize & (n_groups - 1)];
+        buffer[*group_ptr].write(element >> key_bitness);
         *group_ptr += 1;
     }
 
@@ -108,8 +108,8 @@ fn group_by_key_fallback<T: Copy, E>(
             );
             let group = &buffer[start_ptr..end_ptr];
             // XXX: This is ad-hoc `assume_init_ref`, since our MSRV doesn't include it.
-            let group = unsafe { &*(core::ptr::from_ref(group) as *const [T]) };
-            callback(&mut group.iter().copied())?;
+            let group = unsafe { &*(core::ptr::from_ref(group) as *const [u64]) };
+            callback(group, acc | ((i as u64) << acc_bitness))?;
         }
     }
 
@@ -119,10 +119,11 @@ fn group_by_key_fallback<T: Copy, E>(
 /// Split elements into groups by key.
 ///
 /// Groups elements from the iterator based on the key and invokes `callback` for each group. Unlike
-/// [`[T]::chunk_by`], non-consecutive elements are merged, too. The returned groups are sorted by
-/// the key.
+/// [`[T]::chunk_by`], non-consecutive elements are merged, too. The groups are emitted in order of
+/// increasing key.
 ///
-/// The key is computed by taking the bottom `key_bitness` bits of `key(element) >> base_shift`.
+/// The key is computed by taking the bottom `key_bitness` bits of `element`. The callback is
+/// invoked with the key stripped by right-shift.
 ///
 /// `elements_len` should be equal to the length of `elements`, although this is not a safety
 /// requirement.
@@ -133,15 +134,15 @@ fn group_by_key_fallback<T: Copy, E>(
 ///
 /// # Panics
 ///
-/// Might panic if `key_bitness + base_shift > 64` or if `elements_len` does not match the number of
-/// elements in `elements`.
-pub fn group_by_key<T: Copy, E>(
-    elements: impl Iterator<Item = T> + Clone,
+/// Might panic if `key_bitness + acc_bitness >= 64` or if `elements_len` does not match the number
+/// of elements in `elements`.
+pub fn group_by_key<E>(
+    elements: impl Iterator<Item = u64> + Clone,
     elements_len: usize,
-    key: &mut impl FnMut(T) -> u64,
     key_bitness: u32,
-    base_shift: u32,
-    callback: &mut impl FnMut(&mut dyn Iterator<Item = T>) -> Result<(), E>,
+    acc: u64,
+    acc_bitness: u32,
+    callback: &mut impl FnMut(&[u64], u64) -> Result<(), E>,
 ) -> Result<(), E> {
     /// The step at which `key` is consumed. `2 ** BITS` buckets are allocated.
     const BITS: u32 = 8;
@@ -153,35 +154,32 @@ pub fn group_by_key<T: Copy, E>(
         return group_by_key_fallback(
             elements,
             elements_len,
-            key,
             key_bitness,
-            base_shift,
+            acc,
+            acc_bitness,
             callback,
         );
     }
 
-    let shift = base_shift + (key_bitness - BITS);
-
-    let reserved_capacity = (elements_len >> BITS).max(1); // 0 breaks `chunks_mut`
-
     // Partitioning a single allocation is more efficient than allocating multiple times
+    let reserved_capacity = (elements_len >> BITS).max(1); // 0 breaks `chunks_mut`
     let mut buffer = vec![MaybeUninit::uninit(); reserved_capacity << BITS];
     let mut buckets = buffer
         .chunks_mut(reserved_capacity)
         .map(|chunk| Bucket::new(FixedSliceVec::new(chunk)));
-    let mut buckets: [Bucket<T>; 1 << BITS] = core::array::from_fn(|_| buckets.next().unwrap());
+    let mut buckets: [Bucket<u64>; 1 << BITS] = core::array::from_fn(|_| buckets.next().unwrap());
 
     for element in elements {
-        buckets[((key(element) >> shift) & ((1 << BITS) - 1)) as usize].push(element);
+        buckets[element as usize & ((1 << BITS) - 1)].push(element >> BITS);
     }
 
-    for bucket in buckets {
+    for (i, bucket) in buckets.into_iter().enumerate() {
         group_by_key(
             bucket.iter().copied(),
             bucket.len(),
-            key,
             key_bitness - BITS,
-            base_shift,
+            acc | ((i as u64) << acc_bitness),
+            acc_bitness + BITS,
             callback,
         )?;
     }
