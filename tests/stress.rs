@@ -1,5 +1,5 @@
 #![allow(missing_docs, reason = "tests")]
-#![cfg(feature = "build")]
+#![cfg(all(feature = "build", not(miri)))]
 
 use core::hash::BuildHasher;
 use hyble::Phf;
