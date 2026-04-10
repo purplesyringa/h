@@ -217,9 +217,8 @@ impl Buckets {
 ///
 /// `free` must contain at least `approx + 65535` bits.
 unsafe fn find_valid_displacement(approx_for_bucket: &[u64], free: &BitMap) -> Option<u16> {
-    // We don't iterate through a few of the top 65536 displacements to avoid going out of
-    // bounds, but that's noise
-    for displacement_base in (0..=u16::MAX - 57).step_by(57) {
+    // Skip a few of the top valid displacements to avoid going out-of-bounds when reading masks.
+    for displacement_base in (0..=u16::MAX - 64).step_by(57) {
         let mut global_free_mask = u64::MAX;
 
         // Iterate over keys
