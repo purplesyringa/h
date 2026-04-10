@@ -58,6 +58,21 @@ jobs:
       - name: Test
         run: cargo test --all-features -- --nocapture --include-ignored
 
+  test-big-endian:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Install Rust
+        run: rustup update nightly && rustup default nightly
+      - name: Install Cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Test
+        run: cross test --target s390x-unknown-linux-gnu --all-features -- --nocapture
+
   miri:
     timeout-minutes: 5
     runs-on: ubuntu-latest

@@ -227,7 +227,7 @@ unsafe fn find_valid_displacement(approx_for_bucket: &[u64], free: &BitMap) -> O
             let p = free.as_byte_ptr().wrapping_add(start / 8);
             // Bit `i` in the mask indicates whether `approx + displacement_base + i` is free. The
             // bottom 57 bits are assumed to be exact; the top bits may contain false negatives.
-            global_free_mask &= (unsafe { p.cast::<u64>().read_unaligned() }) >> (start % 8);
+            global_free_mask &= u64::from_le_bytes(unsafe { *p.cast::<[u8; 8]>() }) >> (start % 8);
         }
 
         // If `approx_for_bucket` is empty, this immediately returns `Some(0)`.
