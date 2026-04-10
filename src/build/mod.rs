@@ -265,8 +265,11 @@ mod tests {
     #[test]
     fn mixer_no_oob() {
         let mut free = BitMap::new_ones(65535);
+        let mut i = 0;
         // SAFETY: `free` contains exactly as many bits as required
         while let Some(n) = unsafe { find_valid_displacement(&[0], &free) } {
+            assert_eq!(n, i);
+            i += 1;
             // SAFETY: `n < free.len()`
             unsafe {
                 free.reset_unchecked(n as usize);
