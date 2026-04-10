@@ -32,9 +32,12 @@ fn test_phf<T, Seed>(
 fn test_integers(n: usize) {
     // This seed does not have collisions in the first 10M elements, so no need to deduplicate
     // elements, which takes time.
-    assert!(n <= 10_000_000, "too many elements for this test");
     let mut rng = RapidRng::new(0x439f26744da767e5);
-    let keys: Vec<u64> = (0..n).map(|_| rng.next()).collect();
+    let mut keys: Vec<u64> = (0..n).map(|_| rng.next()).collect();
+    if n > 10_000_000 {
+        keys.sort_unstable();
+        keys.dedup();
+    }
     let seeds = core::iter::from_fn(|| Some(rng.next()));
     test_phf(&keys, seeds, |key, seed| key.wrapping_mul(*seed));
 }
@@ -73,6 +76,12 @@ fn build_1m_integers() {
 #[ignore = "needs a lot of memory"]
 fn build_10m_integers() {
     test_integers(10_000_000);
+}
+
+#[test]
+#[ignore = "needs a lot of memory"]
+fn build_50m_integers() {
+    test_integers(50_000_000);
 }
 
 fn read_testdata(name: &str) -> Vec<u8> {

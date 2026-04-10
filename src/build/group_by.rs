@@ -148,7 +148,7 @@ pub fn group_by_key<E>(
     const BITS: u32 = 8;
 
     /// The element count at which a straightforward algorithm is used.
-    const CUTOFF: usize = 200_000;
+    const CUTOFF: usize = 100_000;
 
     if elements_len < CUTOFF || key_bitness <= BITS {
         return group_by_key_fallback(
