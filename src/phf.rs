@@ -1,4 +1,4 @@
-use super::state::{Displacements, Mixer, State};
+use super::state::{Displacements, State};
 use thiserror::Error;
 
 /// Perfect hash function.
@@ -44,7 +44,6 @@ impl Phf {
                 approx_range: 1,
                 bucket_shift: 63,
                 displacements: Displacements::Borrowed(&[0, 0]),
-                mixer: Mixer::Add,
                 capacity: 1,
             },
         }
@@ -65,11 +64,7 @@ impl Phf {
             return Err(LoadError::WrongDisplacementCount);
         }
 
-        if state.capacity
-            != state
-                .mixer
-                .capacity(state.approx_range, &state.displacements)
-        {
+        if state.capacity != get_capacity(state.approx_range, &state.displacements) {
             return Err(LoadError::WrongCapacity);
         }
 
@@ -128,7 +123,7 @@ impl Phf {
         let (approx, bucket) =
             to_approx_bucket(hash, self.state.approx_range, self.state.bucket_shift);
         let displacement = unsafe { *self.state.displacements.get_unchecked(bucket) };
-        self.state.mixer.mix(approx, displacement)
+        approx as usize + displacement as usize
     }
 
     /// Get the upper bound on indices.
@@ -151,45 +146,25 @@ pub(crate) const fn to_approx_bucket(
     bucket_shift: u32,
 ) -> (u64, usize) {
     let product = hash as u128 * approx_range as u128;
-    #[expect(clippy::cast_possible_truncation, reason = "intentional")]
     let (high, low) = ((product >> 64i32) as u64, product as u64);
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "Bucket is guaranteed to fill in usize"
-    )]
     (high, (low >> bucket_shift) as usize)
 }
 
-impl Mixer {
-    /// Mix `Approx` with a displacement to get the final index.
-    pub(crate) const fn mix(self, approx: u64, displacement: u16) -> usize {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "approx + 65535 < approx_range + 65535 <= usize::MAX"
-        )]
-        match self {
-            Self::Add => approx as usize + displacement as usize,
-            Self::Xor => approx as usize ^ displacement as usize,
-        }
-    }
-
-    /// Get the upper bound on indices.
-    ///
-    /// Given the range of `Approx` values and the table of displacements, computes the limit on
-    /// hashes valid for absent keys.
-    pub(crate) fn capacity(self, approx_range: usize, displacements: &[u16]) -> usize {
-        let max_displacement = displacements.iter().copied().max().unwrap_or(0) as usize;
-        match self {
-            Self::Add => approx_range + max_displacement,
-            Self::Xor => {
-                let x = approx_range - 1;
-                let y = max_displacement;
-                let bound = (x & y).checked_ilog2().unwrap_or(0);
-                let max_xor = x | y | ((1 << bound) - 1);
-                max_xor + 1
-            }
-        }
-    }
+/// Calculate the upper bound on indices.
+///
+/// Given the range of `Approx` values and the table of displacements, computes the limit on hashes
+/// valid for absent keys.
+///
+/// # Panics
+///
+/// Panics if `displacements` is empty.
+pub(crate) fn get_capacity(approx_range: usize, displacements: &[u16]) -> usize {
+    approx_range
+        + displacements
+            .iter()
+            .copied()
+            .max()
+            .expect("no displacements") as usize
 }
 
 #[cfg(test)]
@@ -198,33 +173,11 @@ mod tests {
 
     #[test]
     fn test_capacity() {
-        assert_eq!(Mixer::Add.capacity(0x123, &[0x456]), 0x579);
-
-        for approx_range in 1..0x10 {
-            for displacement1 in 0..0x10 {
-                for displacement2 in 0..0x10 {
-                    let answer = Mixer::Xor.capacity(approx_range, &[displacement1, displacement2]);
-                    let expected = (0..approx_range)
-                        .map(|approx| {
-                            (approx ^ displacement1 as usize).max(approx ^ displacement2 as usize)
-                        })
-                        .max()
-                        .unwrap()
-                        + 1;
-                    assert_eq!(answer, expected);
-                }
-            }
-        }
+        assert_eq!(get_capacity(0x123, &[1, 0x456, 2]), 0x579);
     }
 
     #[test]
     fn test_to_approx_bucket() {
         assert_eq!(to_approx_bucket(0x1289f3da73209aad, 12345, 53), (893, 2035));
-    }
-
-    #[test]
-    fn test_mix() {
-        assert_eq!(Mixer::Add.mix(0x123, 0x456), 0x579);
-        assert_eq!(Mixer::Xor.mix(0x123, 0x456), 0x575);
     }
 }

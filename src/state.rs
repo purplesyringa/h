@@ -23,9 +23,6 @@ pub struct State {
     /// Per-bucket displacement values.
     pub displacements: Displacements,
 
-    /// How displacements are mixed into `Approx`.
-    pub mixer: Mixer,
-
     /// The bound on produced indices.
     pub capacity: usize,
 }
@@ -74,16 +71,4 @@ mod serde_support {
             Deserialize::deserialize(deserializer).map(Displacements::Owned)
         }
     }
-}
-
-/// The algorithm for mixing displacements into `Approx`.
-///
-/// See [module-level documentation](self).
-#[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Mixer {
-    /// `+`.
-    Add,
-    /// `^`.
-    Xor,
 }

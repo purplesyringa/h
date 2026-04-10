@@ -68,10 +68,6 @@ impl<'buffer, T> Bucket<'buffer, T> {
 /// # Panics
 ///
 /// Might panic if `elements_len` does not match the number of elements in `elements`.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "we mask out higher bits anyway"
-)]
 fn group_by_key_fallback<T: Copy, E>(
     elements: impl Iterator<Item = T> + Clone,
     elements_len: usize,

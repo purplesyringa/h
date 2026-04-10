@@ -18,14 +18,12 @@ See [docs.rs](https://docs.rs/hyble) for documentation and examples.
 Random stuff to be aware of:
 
 - hyble has features, any combinations of which should compile. `cargo check` doesn't enable any of them. Features can be enabled individually with `cargo check -F serde -F build`. Same for Clippy.
-  
-- Pedantic [Clippy](https://github.com/rust-lang/rust-clippy) diagnostics are enabled, most obnoxiously `cast_possible_truncation`, since it caught some bugs. `#[expect]` is fine.
 
 - hyble is `#![no_std]` and gates methods that require allocation behind `#[cfg(feature = "alloc")]` or equivalent.
 
 - hyble has stress-tests that need hundreds of megabytes of memory to run. They are ignored by default and can be enabled with `cargo test -- --include-ignored`.
 
-- hyble is data-oriented and tuned for large datasets. We cache data that can be reused between seeds and mixers, use cache-aware algorithms, profile code, and monitor build times and memory utilization.
+- hyble is data-oriented and tuned for large datasets. We cache data that can be reused between seeds, use cache-aware algorithms, profile code, and monitor build times and memory utilization.
 
 - hyble started back when rust-phf wasn't well-maintained, and I wanted to provide a powerful alternative with a much broader scope than hyble is today. That code can be found on the `legacy` branch, if you ever need to `git blame` it.
 
