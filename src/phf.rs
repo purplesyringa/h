@@ -179,6 +179,9 @@ mod tests {
 
     #[test]
     fn test_to_approx_bucket() {
-        assert_eq!(to_approx_bucket(0x1289f3da73209aad, 12345, 53), (893, 2035));
+        assert_eq!(
+            to_approx_bucket(0x1289f3da73209aad, 12345, 0xff),
+            (893, 0xad)
+        );
     }
 }
