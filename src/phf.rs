@@ -20,9 +20,9 @@ pub struct Phf {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum LoadError {
-    /// too large `bucket_shift` value
-    #[error("too large `bucket_shift` value")]
-    TooLargeBucketShift,
+    /// invalid `bucket_mask` value
+    #[error("invalid `bucket_mask` value")]
+    InvalidBucketMask,
 
     /// wrong displacement count
     #[error("wrong displacement count")]
@@ -42,8 +42,8 @@ impl Phf {
         Self {
             state: State {
                 approx_range: 1,
-                bucket_shift: 63,
-                displacements: Displacements::Borrowed(&[0, 0]),
+                bucket_mask: 0,
+                displacements: Displacements::Borrowed(&[0]),
                 capacity: 1,
             },
         }
@@ -55,12 +55,12 @@ impl Phf {
     ///
     /// Returns an error if the state is malformed.
     pub fn load(state: State) -> Result<Self, LoadError> {
-        if state.bucket_shift >= 64 {
-            return Err(LoadError::TooLargeBucketShift);
+        let bucket_count = state.bucket_mask.wrapping_add(1);
+        if !bucket_count.is_power_of_two() {
+            return Err(LoadError::InvalidBucketMask);
         }
 
-        let bucket_count = 1 << (64 - state.bucket_shift);
-        if state.displacements.len() as u64 != bucket_count {
+        if state.displacements.len() != bucket_count {
             return Err(LoadError::WrongDisplacementCount);
         }
 
@@ -121,7 +121,7 @@ impl Phf {
     #[must_use]
     pub fn get(&self, hash: u64) -> usize {
         let (approx, bucket) =
-            to_approx_bucket(hash, self.state.approx_range, self.state.bucket_shift);
+            to_approx_bucket(hash, self.state.approx_range, self.state.bucket_mask);
         let displacement = unsafe { *self.state.displacements.get_unchecked(bucket) };
         approx + displacement as usize
     }
@@ -143,11 +143,12 @@ impl Phf {
 pub(crate) const fn to_approx_bucket(
     hash: u64,
     approx_range: usize,
-    bucket_shift: u32,
+    bucket_mask: usize,
 ) -> (usize, usize) {
-    let product = hash as u128 * approx_range as u128;
-    let (high, low) = ((product >> 64i32) as u64, product as u64);
-    (high as usize, (low >> bucket_shift) as usize)
+    (
+        ((hash as u128 * approx_range as u128) >> 64i32) as usize,
+        hash as usize & bucket_mask,
+    )
 }
 
 /// Calculate the upper bound on indices.

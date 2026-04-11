@@ -76,8 +76,8 @@ struct Buckets {
     /// The number of buckets.
     bucket_count: usize,
 
-    /// How much a 64-bit hash needs to be shifted to the right to produce a bucket ID.
-    bucket_shift: u32,
+    /// The bit mask for extracting `Bucket` from the 64-bit hash.
+    bucket_mask: usize,
 }
 
 impl Buckets {
@@ -105,10 +105,9 @@ impl Buckets {
             "approx_range too large"
         );
 
-        // At least two buckets are required so that bucket_shift < 64
-        let bucket_count = keys.len().div_ceil(Self::LAMBDA).next_power_of_two().max(2);
+        let bucket_count = keys.len().div_ceil(Self::LAMBDA).next_power_of_two();
         let bucket_bits = bucket_count.ilog2();
-        let bucket_shift = 64 - bucket_bits;
+        let bucket_mask = bucket_count - 1;
 
         // Iterate over buckets
         let keys_len = keys.len();
@@ -120,7 +119,7 @@ impl Buckets {
                 // can be improved as
                 //     ((hash as u128 * approx_range as u128) >> (64 - bucket_bits)) as u64
                 // ...but LLVM struggles with optimizing 128-bit shifts like that.
-                let (approx, bucket) = to_approx_bucket(key, approx_range, bucket_shift);
+                let (approx, bucket) = to_approx_bucket(key, approx_range, bucket_mask);
                 ((approx as u64) << bucket_bits) | bucket as u64
             }),
             keys_len,
@@ -155,7 +154,7 @@ impl Buckets {
             by_size,
             approx_range,
             bucket_count,
-            bucket_shift,
+            bucket_mask,
         })
     }
 
@@ -204,7 +203,7 @@ impl Buckets {
         Some(Phf {
             state: State {
                 approx_range: self.approx_range,
-                bucket_shift: self.bucket_shift,
+                bucket_mask: self.bucket_mask,
                 displacements: Displacements::Owned(displacements),
                 capacity,
             },

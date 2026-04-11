@@ -17,8 +17,8 @@ pub struct State {
     /// The upper bound on `Approx`.
     pub approx_range: usize,
 
-    /// `64 - ilog2(bucket_count)`.
-    pub bucket_shift: u32,
+    /// Bit mask for the `Bucket`.
+    pub bucket_mask: usize,
 
     /// Per-bucket displacement values.
     pub displacements: Displacements,

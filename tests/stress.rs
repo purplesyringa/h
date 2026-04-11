@@ -27,6 +27,32 @@ fn test_phf<T, Seed>(
         indices.windows(2).all(|pair| pair[0] != pair[1]),
         "duplicate indices"
     );
+
+    const C: u64 = 0x439f26744da767e5;
+    let n_accesses = 10000000;
+
+    let start = Instant::now();
+    let mut x = C;
+    for _ in 0..n_accesses {
+        // Seems to be a good enough fast pseudo-random function to measure throughput.
+        x = x.wrapping_add((phf.get(x) as u64).wrapping_mul(C));
+    }
+    println!(
+        "{n_accesses} chained accesses: {:?} elapsed ({x})",
+        start.elapsed()
+    );
+
+    let start = Instant::now();
+    let mut x = C;
+    let mut y = 0usize;
+    for _ in 0..n_accesses {
+        x = x.wrapping_add(C);
+        y = y.wrapping_add(phf.get(x));
+    }
+    println!(
+        "{n_accesses} parallel accesses: {:?} elapsed ({y})",
+        start.elapsed()
+    );
 }
 
 fn test_integers(n: usize) {

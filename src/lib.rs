@@ -30,8 +30,8 @@
 //!
 //! PHFs are built by refining typical, imperfect hash functions, such as [SipHash] or
 //! [`rapidhash`]. The hashes should have high quality: for example, [`rapidhash::quality`] works,
-//! but [`rapidhash::fast`] hangs. hyble cares about top bits more than bottom bits. The hashes
-//! should also avoid seed-independent collisions.
+//! but [`rapidhash::fast`] hangs. hyble requires full-avalanche and lack of seed-independent
+//! collisions.
 //!
 //! [SipHash]: https://en.wikipedia.org/wiki/SipHash
 //! [`rapidhash`]: https://docs.rs/rapidhash/latest/rapidhash/
