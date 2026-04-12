@@ -161,7 +161,9 @@ pub(crate) const fn get_capacity(approx_range: usize, displacements: &[u16]) -> 
         i += 1;
     }
 
-    approx_range.strict_add(max_displacement as usize)
+    approx_range
+        .checked_add(max_displacement as usize)
+        .expect("out of bounds")
 }
 
 #[cfg(test)]

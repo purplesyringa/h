@@ -39,6 +39,7 @@ impl Displacements {
     ///
     /// Equivalent to `&*displacements`, provided for use in `const` contexts.
     #[inline]
+    #[must_use]
     pub const fn as_slice(&self) -> &[u16] {
         match self {
             Self::Borrowed(slice) => slice,
