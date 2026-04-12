@@ -17,14 +17,8 @@ pub struct State {
     /// The upper bound on `Approx`.
     pub approx_range: usize,
 
-    /// Bit mask for the `Bucket`.
-    pub bucket_mask: usize,
-
     /// Per-bucket displacement values.
     pub displacements: Displacements,
-
-    /// The bound on produced indices.
-    pub capacity: usize,
 }
 
 /// Displacement array.
@@ -40,16 +34,26 @@ pub enum Displacements {
     Owned(alloc::vec::Vec<u16>),
 }
 
+impl Displacements {
+    /// Convert to slice.
+    ///
+    /// Equivalent to `&*displacements`, provided for use in `const` contexts.
+    #[inline]
+    pub const fn as_slice(&self) -> &[u16] {
+        match self {
+            Self::Borrowed(slice) => slice,
+            #[cfg(feature = "alloc")]
+            Self::Owned(vec) => vec.as_slice(),
+        }
+    }
+}
+
 impl core::ops::Deref for Displacements {
     type Target = [u16];
 
     #[inline]
     fn deref(&self) -> &[u16] {
-        match self {
-            Self::Borrowed(slice) => slice,
-            #[cfg(feature = "alloc")]
-            Self::Owned(vec) => vec,
-        }
+        self.as_slice()
     }
 }
 

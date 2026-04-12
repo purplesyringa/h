@@ -13,24 +13,23 @@ use thiserror::Error;
     )
 )]
 pub struct Phf {
+    /// Persisted state.
     pub(crate) state: State,
+
+    /// Bit mask for the `Bucket`.
+    bucket_mask: usize,
+
+    /// The bound on produced indices.
+    capacity: usize,
 }
 
 /// Validation failure.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum LoadError {
-    /// invalid `bucket_mask` value
-    #[error("invalid `bucket_mask` value")]
-    InvalidBucketMask,
-
-    /// wrong displacement count
-    #[error("wrong displacement count")]
-    WrongDisplacementCount,
-
-    /// wrong capacity
-    #[error("wrong capacity")]
-    WrongCapacity,
+    /// invalid displacement count
+    #[error("invalid displacement count")]
+    InvalidDisplacementCount,
 }
 
 impl Phf {
@@ -39,13 +38,11 @@ impl Phf {
     /// The resulting PHF can be used with any hasher and any data types.
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            state: State {
+        unsafe {
+            Self::load_unchecked(State {
                 approx_range: 1,
-                bucket_mask: 0,
                 displacements: Displacements::Borrowed(&[0]),
-                capacity: 1,
-            },
+            })
         }
     }
 
@@ -55,20 +52,10 @@ impl Phf {
     ///
     /// Returns an error if the state is malformed.
     pub fn load(state: State) -> Result<Self, LoadError> {
-        let bucket_count = state.bucket_mask.wrapping_add(1);
-        if !bucket_count.is_power_of_two() {
-            return Err(LoadError::InvalidBucketMask);
+        if !state.displacements.len().is_power_of_two() {
+            return Err(LoadError::InvalidDisplacementCount);
         }
-
-        if state.displacements.len() != bucket_count {
-            return Err(LoadError::WrongDisplacementCount);
-        }
-
-        if state.capacity != get_capacity(state.approx_range, &state.displacements) {
-            return Err(LoadError::WrongCapacity);
-        }
-
-        Ok(Self { state })
+        Ok(unsafe { Self::load_unchecked(state) })
     }
 
     /// Load [`State`] as [`Phf`] without performing validation.
@@ -79,7 +66,13 @@ impl Phf {
     /// previously been validated by [`Phf::load`].
     #[must_use]
     pub const unsafe fn load_unchecked(state: State) -> Self {
-        Self { state }
+        let bucket_mask = state.displacements.as_slice().len() - 1;
+        let capacity = get_capacity(state.approx_range, state.displacements.as_slice());
+        Self {
+            state,
+            bucket_mask,
+            capacity,
+        }
     }
 
     /// Extract [`State`] from [`Phf`].
@@ -120,8 +113,7 @@ impl Phf {
     #[inline]
     #[must_use]
     pub fn get(&self, hash: u64) -> usize {
-        let (approx, bucket) =
-            to_approx_bucket(hash, self.state.approx_range, self.state.bucket_mask);
+        let (approx, bucket) = to_approx_bucket(hash, self.state.approx_range, self.bucket_mask);
         let displacement = unsafe { *self.state.displacements.get_unchecked(bucket) };
         approx + displacement as usize
     }
@@ -135,7 +127,7 @@ impl Phf {
     /// PHF doesn't store the exact count.
     #[must_use]
     pub const fn capacity(&self) -> usize {
-        self.state.capacity
+        self.capacity
     }
 }
 
@@ -158,14 +150,18 @@ pub(crate) const fn to_approx_bucket(
 ///
 /// # Panics
 ///
-/// Panics if `displacements` is empty.
-pub(crate) fn get_capacity(approx_range: usize, displacements: &[u16]) -> usize {
-    approx_range
-        + displacements
-            .iter()
-            .copied()
-            .max()
-            .expect("no displacements") as usize
+/// Panics if the capacity is out of bounds.
+pub(crate) const fn get_capacity(approx_range: usize, displacements: &[u16]) -> usize {
+    let mut i = 0;
+    let mut max_displacement = 0;
+    while i < displacements.len() {
+        if displacements[i] > max_displacement {
+            max_displacement = displacements[i];
+        }
+        i += 1;
+    }
+
+    approx_range.strict_add(max_displacement as usize)
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use super::{
     Phf,
-    phf::{get_capacity, to_approx_bucket},
+    phf::to_approx_bucket,
     state::{Displacements, State},
 };
 use alloc::{vec, vec::Vec};
@@ -75,9 +75,6 @@ struct Buckets {
 
     /// The number of buckets.
     bucket_count: usize,
-
-    /// The bit mask for extracting `Bucket` from the 64-bit hash.
-    bucket_mask: usize,
 }
 
 impl Buckets {
@@ -154,7 +151,6 @@ impl Buckets {
             by_size,
             approx_range,
             bucket_count,
-            bucket_mask,
         })
     }
 
@@ -198,15 +194,11 @@ impl Buckets {
             }
         }
 
-        let capacity = get_capacity(self.approx_range, &displacements);
-
-        Some(Phf {
-            state: State {
+        Some(unsafe {
+            Phf::load_unchecked(State {
                 approx_range: self.approx_range,
-                bucket_mask: self.bucket_mask,
                 displacements: Displacements::Owned(displacements),
-                capacity,
-            },
+            })
         })
     }
 }
